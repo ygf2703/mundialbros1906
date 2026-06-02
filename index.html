@@ -1035,6 +1035,45 @@ function clearAllUnsavedPredictions() {
   unsavedPredictionKeys.clear();
 }
 
+function confirmAppAction({title, message, confirmLabel='אישור', cancelLabel='ביטול'}={}) {
+  return new Promise(resolve => {
+    const existing = document.getElementById('appConfirmModal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'appConfirmModal';
+    overlay.innerHTML = `
+      <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="appConfirmTitle">
+        <div class="modal-handle"></div>
+        <h3 id="appConfirmTitle" style="font-size:18px;font-weight:800;margin-bottom:10px;color:var(--blue)">${escapeHtml(title || 'אישור פעולה')}</h3>
+        <p style="font-size:14px;color:var(--text2);line-height:1.55;margin-bottom:18px">${escapeHtml(message || 'להמשיך?')}</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-danger btn-full" type="button" data-confirm-yes>${escapeHtml(confirmLabel)}</button>
+          <button class="btn btn-secondary btn-full" type="button" data-confirm-no>${escapeHtml(cancelLabel)}</button>
+        </div>
+      </div>`;
+
+    const close = value => {
+      document.removeEventListener('keydown', onKeyDown);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKeyDown = event => {
+      if (event.key === 'Escape') close(false);
+      if (event.key === 'Enter') close(true);
+    };
+
+    overlay.addEventListener('click', event => {
+      if (event.target === overlay || event.target.closest('[data-confirm-no]')) close(false);
+      if (event.target.closest('[data-confirm-yes]')) close(true);
+    });
+    document.addEventListener('keydown', onKeyDown);
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-confirm-yes]')?.focus();
+  });
+}
+
 function guardUnsavedPredictions() {
   if (unsavedPredictionKeys.size === 0) return true;
   alert(UNSAVED_PREDICTIONS_MESSAGE);
@@ -2555,7 +2594,12 @@ function resetPredictionScore(pred) {
 }
 
 window.resetResultsAndScores = async function() {
-  if (!confirm('לאפס את כל התוצאות והניקוד שחושבו בבדיקה? המשתמשים, הסיסמאות והניחושים יישארו.')) return;
+  const approved = await confirmAppAction({
+    title: 'איפוס תוצאות וניקוד',
+    message: 'לאפס את כל התוצאות והניקוד שחושבו בבדיקה? המשתמשים, הסיסמאות והניחושים יישארו.',
+    confirmLabel: 'אפס תוצאות וניקוד'
+  });
+  if (!approved) return;
 
   const matches = loadData('matches', []).map(resetMatchResult);
   const koMatches = loadData('knockoutMatches', []).map(resetMatchResult);
@@ -2680,7 +2724,12 @@ window.addUser = async function() {
 };
 
 window.resetUserPassword = async function(userId) {
-  if (!confirm('לאפס את הסיסמה? המשתמש יבחר סיסמה חדשה בהתחברות הבאה.')) return;
+  const approved = await confirmAppAction({
+    title: 'איפוס סיסמה',
+    message: 'לאפס את הסיסמה? המשתמש יבחר סיסמה חדשה בהתחברות הבאה.',
+    confirmLabel: 'אפס סיסמה'
+  });
+  if (!approved) return;
   const users = loadData('users',[]);
   const idx = users.findIndex(u => u.id === userId);
   if (idx === -1) { showToast('משתמש לא נמצא'); return; }
@@ -2729,7 +2778,12 @@ function removeUserScopedData(userIds) {
 async function deleteUsersByIds(userIds, confirmText) {
   const ids = [...new Set(userIds)].filter(Boolean);
   if (!ids.length) { showToast('לא נבחרו משתמשים למחיקה'); return; }
-  if (!confirm(confirmText)) return;
+  const approved = await confirmAppAction({
+    title: ids.length > 1 ? 'מחיקת משתמשים' : 'מחיקת משתמש',
+    message: confirmText,
+    confirmLabel: ids.length > 1 ? `מחק ${ids.length} משתמשים` : 'מחק משתמש'
+  });
+  if (!approved) return;
   let users = loadData('users',[]);
   const before = users.length;
   users = users.filter(u => !ids.includes(u.id));
