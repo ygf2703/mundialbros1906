@@ -2269,7 +2269,11 @@ function renderAdminResults() {
   
   let html = `
     <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">⚽ הזנת תוצאות אמת</h2>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">הזן תוצאות משחקים שהסתיימו וחשב ניקוד למשתמשים</p>`;
+    <p style="font-size:13px;color:var(--text2);margin-bottom:10px">הזן תוצאות משחקים שהסתיימו וחשב ניקוד למשתמשים</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px;background:rgba(255,214,10,.18);border:1px solid rgba(216,154,0,.22);border-radius:var(--radius)">
+      <button class="btn btn-primary btn-sm" onclick="calcAllMatches()">🔄 חשב ניקוד לכל המשחקים שהסתיימו</button>
+      <button class="btn btn-danger btn-sm" onclick="resetResultsAndScores()">אפס תוצאות וניקוד לסיום הבדיקה</button>
+    </div>`;
   
   // Filter options
   html += `
@@ -2308,12 +2312,6 @@ function renderAdminResults() {
       </div>`;
   });
   html += `</div>`;
-  
-  html += `
-    <div style="margin-top:20px;padding:14px;background:var(--blue-pale);border-radius:var(--radius)">
-      <button class="btn btn-primary btn-full" onclick="calcAllMatches()">🔄 חשב ניקוד לכל המשחקים שהסתיימו</button>
-      <button class="btn btn-danger btn-full" style="margin-top:10px" onclick="resetResultsAndScores()">אפס תוצאות וניקוד לסיום הבדיקה</button>
-    </div>`;
   
   return html;
 }
@@ -2487,7 +2485,7 @@ function renderAdminUsers() {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="refreshAdminUsersFromCloud()">רענן סטטוס</button>
         <button class="btn btn-secondary btn-sm" onclick="switchAdminPanel('upload-users')">ייבוא BULK</button>
-        <button class="btn btn-danger btn-sm" id="bulkDeleteUsersBtn" onclick="deleteSelectedUsers()" disabled>מחק נבחרים</button>
+        <button class="btn btn-danger btn-sm" id="bulkDeleteUsersBtn" onclick="deleteSelectedUsers()">מחק נבחרים</button>
         <button class="btn btn-primary btn-sm" onclick="showAddUser()">+ הוסף משתמש</button>
       </div>
     </div>
@@ -2505,11 +2503,11 @@ function renderAdminUsers() {
     </div>
     <div style="overflow-x:auto">
       <table class="admin-table">
-        <thead><tr><th><input type="checkbox" id="selectAllUsers" onchange="toggleAdminUsersSelection(this.checked)"></th><th>שם מלא</th><th>שם קבוצה</th><th>אימייל</th><th>טלפון</th><th>סיסמה</th><th>ניקוד</th><th>מקום</th><th>פעולות</th></tr></thead>
+        <thead><tr><th><input type="checkbox" id="selectAllUsers" onchange="window.toggleAdminUsersSelection(this.checked)"></th><th>שם מלא</th><th>שם קבוצה</th><th>אימייל</th><th>טלפון</th><th>סיסמה</th><th>ניקוד</th><th>מקום</th><th>פעולות</th></tr></thead>
         <tbody>
           ${lb.map(u => `
             <tr>
-              <td><input type="checkbox" class="admin-user-select" value="${escapeHtml(u.id)}" onchange="updateBulkDeleteUsersButton()"></td>
+              <td><input type="checkbox" class="admin-user-select" value="${escapeHtml(u.id)}" onchange="window.updateBulkDeleteUsersButton()"></td>
               <td><strong>${u.fullName || u.displayName}</strong></td>
               <td style="color:var(--yellow-dark);font-weight:600">${u.teamName || '-'}</td>
               <td style="font-size:12px">${u.email || '-'}</td>
@@ -2589,7 +2587,7 @@ function getSelectedAdminUserIds() {
 
 window.toggleAdminUsersSelection = function(checked) {
   document.querySelectorAll('.admin-user-select').forEach(input => { input.checked = checked; });
-  updateBulkDeleteUsersButton();
+  window.updateBulkDeleteUsersButton();
 };
 
 window.updateBulkDeleteUsersButton = function() {
@@ -2598,7 +2596,7 @@ window.updateBulkDeleteUsersButton = function() {
   const selectAll = document.getElementById('selectAllUsers');
   const boxes = [...document.querySelectorAll('.admin-user-select')];
   if (btn) {
-    btn.disabled = selected.length === 0;
+    btn.disabled = false;
     btn.textContent = selected.length ? `מחק ${selected.length} נבחרים` : 'מחק נבחרים';
   }
   if (selectAll) {
@@ -2634,6 +2632,7 @@ async function deleteUsersByIds(userIds, confirmText) {
 
 window.deleteSelectedUsers = async function() {
   const ids = getSelectedAdminUserIds();
+  if (!ids.length) { showToast('סמן משתמשים למחיקה'); return; }
   await deleteUsersByIds(ids, `למחוק ${ids.length} משתמשים שנבחרו? הפעולה תמחק גם את הניחושים שלהם.`);
 };
 
