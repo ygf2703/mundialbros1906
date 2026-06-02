@@ -303,6 +303,9 @@ const TOP_SCORER_OPTIONS = [
   "ג'וד בלינגהאם"
 ];
 
+const ADMIN_LOGIN_ALLOWED_EMAILS = ['noamfrostig@gmail.com'];
+const ADMIN_LOGIN_ALLOWED_PHONES = ['0526806838', '+972526806838'];
+
 // ============================================================
 // DATA LAYER
 // ============================================================
@@ -333,6 +336,19 @@ function normalizePhone(value) {
     .toString()
     .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
     .replace(/[^\d+]/g, '');
+}
+
+function canRevealAdminLoginForValue(value) {
+  const email = normalizeEmail(value);
+  const phone = normalizePhone(value);
+  return ADMIN_LOGIN_ALLOWED_EMAILS.includes(email) || ADMIN_LOGIN_ALLOWED_PHONES.includes(phone);
+}
+
+function canRevealAdminLoginForUser(user) {
+  return !!user && (
+    canRevealAdminLoginForValue(user.email) ||
+    canRevealAdminLoginForValue(user.phone)
+  );
 }
 
 function isValidEmail(value) {
@@ -816,7 +832,7 @@ function renderLoginPage() {
       <button class="btn btn-primary btn-full" id="loginBtn" style="margin-top:8px">
         המשך
       </button>
-      <div style="margin-top:16px;text-align:center">
+      <div id="adminLoginWrap" style="margin-top:16px;text-align:center;display:none">
         <button class="btn btn-secondary btn-sm" id="adminLoginBtn">כניסת מנהל</button>
       </div>
     </div>
@@ -848,6 +864,12 @@ function bindLoginPage() {
   const existingPasswordGroup = document.getElementById('existingPasswordGroup');
   const newPasswordGroup = document.getElementById('newPasswordGroup');
   const loginUserHint = document.getElementById('loginUserHint');
+  const adminLoginWrap = document.getElementById('adminLoginWrap');
+
+  function updateAdminLoginVisibility() {
+    const allowed = canRevealAdminLoginForUser(selectedLoginUser) || canRevealAdminLoginForValue(emailInput.value);
+    adminLoginWrap.style.display = allowed ? 'block' : 'none';
+  }
 
   function completeLogin(user) {
     clearAllUnsavedPredictions();
@@ -868,6 +890,7 @@ function bindLoginPage() {
       ? `${user.fullName || user.displayName || user.email}, זו ההתחברות הראשונה שלך. בחר סיסמה להמשך.`
       : `${user.fullName || user.displayName || user.email}, הזן את הסיסמה שלך.`;
     loginBtn.textContent = needsSetup ? 'שמירת סיסמה וכניסה' : 'כניסה';
+    updateAdminLoginVisibility();
     document.getElementById(needsSetup ? 'loginNewPassword' : 'loginPassword')?.focus();
   }
 
@@ -880,6 +903,7 @@ function bindLoginPage() {
     document.getElementById('loginPassword').value = '';
     document.getElementById('loginNewPassword').value = '';
     document.getElementById('loginConfirmPassword').value = '';
+    updateAdminLoginVisibility();
     emailInput.focus();
   }
 
@@ -933,18 +957,24 @@ function bindLoginPage() {
   emailInput.onkeydown = e => {
     if (e.key === 'Enter') loginBtn.click();
   };
+  emailInput.oninput = updateAdminLoginVisibility;
   ['loginPassword','loginNewPassword','loginConfirmPassword'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.onkeydown = e => { if (e.key === 'Enter') loginBtn.click(); };
   });
   document.getElementById('changeLoginEmail').onclick = resetLoginStep;
   document.getElementById('adminLoginBtn').onclick = () => {
+    if (!canRevealAdminLoginForUser(selectedLoginUser) && !canRevealAdminLoginForValue(emailInput.value)) return;
     document.getElementById('adminModal').classList.remove('hidden');
   };
   document.getElementById('adminModalClose').onclick = () => {
     document.getElementById('adminModal').classList.add('hidden');
   };
   document.getElementById('adminLoginSubmit').onclick = () => {
+    if (!canRevealAdminLoginForUser(selectedLoginUser) && !canRevealAdminLoginForValue(emailInput.value)) {
+      document.getElementById('adminLoginError').innerHTML = '<div class="form-error">כניסת מנהל זמינה רק למשתמש מורשה</div>';
+      return;
+    }
     const email = document.getElementById('adminEmail').value;
     const pass = document.getElementById('adminPass').value;
     const admin = loadData('admin', {});
@@ -956,6 +986,7 @@ function bindLoginPage() {
       document.getElementById('adminLoginError').innerHTML = '<div class="form-error">אימייל או סיסמה שגויים</div>';
     }
   };
+  updateAdminLoginVisibility();
 }
 
 function showLoginError(msg) {
