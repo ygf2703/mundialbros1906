@@ -12,14 +12,17 @@
   --yellow:#F5C518;--yellow-dark:#D4A017;--yellow-pale:#FFFBE6;
   --white:#FFFFFF;--bg:#F0F4FF;--card:#FFFFFF;
   --text:#0D1B3E;--text2:#2D4A7A;--text3:#7A90B8;
-  --border:#C5D5F0;--success:#10B981;--danger:#EF4444;--warn:#F59E0B;
+  --border:#C5D5F0;--success:#10B981;--danger:#334155;--warn:#F5C518;
   --shadow:0 2px 12px rgba(13,36,81,0.15);
   --radius:12px;--radius-sm:8px;
 }
 
 /* Logo SVG inline */
 .logo-img{width:44px;height:44px;display:block}
-body{font-family:'Heebo',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;direction:rtl}
+body{font-family:'Heebo',sans-serif;background:#040D1F;color:var(--text);min-height:100vh;direction:rtl;position:relative;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;background:url("assets/login-fans-bg.png") center/cover no-repeat;opacity:.1;animation:appBgOpacity 12s ease-in-out infinite;pointer-events:none;z-index:0}
+body::after{content:"";position:fixed;inset:0;background:linear-gradient(160deg,rgba(4,13,31,.9) 0%,rgba(13,36,81,.72) 48%,rgba(240,244,255,.88) 100%);pointer-events:none;z-index:0}
+#app,.toast{position:relative;z-index:1}
 h1,h2,h3{font-family:'Rubik',sans-serif}
 button{cursor:pointer;font-family:'Heebo',sans-serif}
 input,select,textarea{font-family:'Heebo',sans-serif}
@@ -52,7 +55,7 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px;border:none;background:none;color:var(--text3);font-size:10px;font-weight:500;transition:.15s}
 .nav-item.active{color:var(--blue-light)}
 .nav-item svg{width:22px;height:22px}
-.nav-badge{background:var(--danger);color:white;border-radius:10px;padding:1px 5px;font-size:9px;font-weight:700;position:absolute;top:-2px;right:-4px}
+.nav-badge{background:var(--yellow);color:var(--blue);border-radius:10px;padding:1px 5px;font-size:9px;font-weight:700;position:absolute;top:-2px;right:-4px}
 .nav-item-wrap{position:relative}
 
 /* Cards */
@@ -86,6 +89,7 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .btn-yellow{background:var(--yellow);color:var(--blue)}
 .btn-yellow:hover{background:var(--yellow-dark)}
 .btn-danger{background:var(--danger);color:white}
+.btn-danger:hover{background:#1E293B}
 .btn-sm{padding:6px 12px;font-size:12px}
 .btn-full{width:100%}
 .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -93,15 +97,15 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 /* Status badges */
 .status-badge{display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600}
 .status-open{background:#DCFCE7;color:#15803D}
-.status-locked{background:#FEF3C7;color:#92400E}
+.status-locked{background:#FFFBE6;color:var(--blue)}
 .status-finished{background:#F3F4F6;color:#6B7280}
-.status-scored{background:#EDE9FE;color:#5B21B6}
+.status-scored{background:#D6E4FF;color:var(--blue)}
 
 /* Score result */
 .score-result{display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600}
 .result-exact{background:#DCFCE7;color:#15803D}
 .result-direction{background:#DBEAFE;color:#1D4ED8}
-.result-miss{background:#FEE2E2;color:#991B1B}
+.result-miss{background:#F3F4F6;color:#475569}
 
 /* Login page */
 .login-page{min-height:100vh;background:#040D1F;display:flex;align-items:center;justify-content:center;padding:24px 16px;position:relative;overflow:hidden;isolation:isolate}
@@ -109,7 +113,9 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .login-page::after{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(4,13,31,.82) 0%,rgba(13,36,81,.5) 50%,rgba(7,21,48,.82) 100%);z-index:0}
 .login-card{background:white;border-radius:20px;padding:32px 28px;width:calc(100vw - 32px);max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5);border-top:4px solid var(--yellow);position:relative;z-index:1}
 @keyframes loginBgOpacity{0%,100%{opacity:.28}50%{opacity:.48}}
+@keyframes appBgOpacity{0%,100%{opacity:.08}50%{opacity:.18}}
 @media (prefers-reduced-motion:reduce){.login-page::before{animation:none;opacity:.38}}
+@media (prefers-reduced-motion:reduce){body::before{animation:none;opacity:.12}}
 .login-logo{text-align:center;margin-bottom:28px}
 .login-ball{font-size:52px;margin-bottom:8px}
 .login-title{font-family:'Rubik',sans-serif;font-size:24px;font-weight:900;color:var(--blue);line-height:1.2}
@@ -118,7 +124,7 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .form-label{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px;display:block}
 .form-input{width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:15px;color:var(--text);transition:.2s;background:white}
 .form-input:focus{outline:none;border-color:var(--blue-light);background:var(--blue-pale)}
-.form-error{background:#FEE2E2;color:#991B1B;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-top:8px}
+.form-error{background:#EAF2FF;color:var(--blue);border:1px solid #93C5FD;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-top:8px}
 .form-hint{font-size:12px;color:var(--text3);margin-top:4px}
 
 /* Leaderboard */
@@ -127,9 +133,9 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .leaderboard-table td{padding:10px 12px;font-size:13px;border-bottom:1px solid var(--border);text-align:right}
 .leaderboard-table tr:hover td{background:var(--blue-pale)}
 .leaderboard-table tr.me td{background:#FFFBE6;font-weight:600}
-.rank-medal-1{color:#F59E0B;font-weight:900}
+.rank-medal-1{color:var(--yellow-dark);font-weight:900}
 .rank-medal-2{color:#9CA3AF;font-weight:900}
-.rank-medal-3{color:#92400E;font-weight:900}
+.rank-medal-3{color:var(--text2);font-weight:900}
 
 /* Admin */
 .admin-nav{background:var(--blue);padding:8px;display:flex;gap:4px;overflow-x:auto}
@@ -1132,8 +1138,8 @@ function renderDashboard() {
         <div style="font-size:26px;font-weight:900;font-family:'Rubik';color:var(--yellow-dark)">#${rank}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">מקום מתוך ${total}</div>
       </div>
-      <div class="card" style="text-align:center;padding:14px 8px;${missing>0?'border:2px solid var(--danger)':''}">
-        <div style="font-size:26px;font-weight:900;font-family:'Rubik';color:${missing>0?'var(--danger)':'var(--success)'}">${missing}</div>
+      <div class="card" style="text-align:center;padding:14px 8px;${missing>0?'border:2px solid var(--yellow)':''}">
+        <div style="font-size:26px;font-weight:900;font-family:'Rubik';color:${missing>0?'var(--blue)':'var(--success)'}">${missing}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">ניחושים חסרים</div>
       </div>
     </div>`;
@@ -1142,13 +1148,13 @@ function renderDashboard() {
     ${countdownHtml}
     ${statsHtml}
     ${missing > 0 ? `
-    <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--radius);padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
+    <div style="background:var(--yellow-pale);border:1px solid var(--yellow);border-radius:var(--radius);padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
       <span style="font-size:24px">⚠️</span>
       <div>
-        <div style="font-size:14px;font-weight:700;color:#991B1B">יש לך ${missing} ניחושים חסרים!</div>
-        <div style="font-size:12px;color:#DC2626;margin-top:2px">המהר לנחש לפני נעילת המשחקים</div>
+        <div style="font-size:14px;font-weight:700;color:var(--blue)">יש לך ${missing} ניחושים חסרים!</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">המהר לנחש לפני נעילת המשחקים</div>
       </div>
-      <button class="btn btn-danger btn-sm" style="margin-right:auto" onclick="navTo('predictions')">נחש עכשיו</button>
+      <button class="btn btn-primary btn-sm" style="margin-right:auto" onclick="navTo('predictions')">נחש עכשיו</button>
     </div>` : ''}
     ${scored.length > 0 ? `
     <div class="card">
@@ -1296,7 +1302,7 @@ function renderPredictions() {
       
       html += `
         <div class="match-card">
-          <div class="match-card-header" style="background:linear-gradient(135deg,#3D1A7A 0%,#5A2DB0 100%)">
+          <div class="match-card-header" style="background:linear-gradient(135deg,var(--blue) 0%,var(--blue-light) 100%)">
             <span class="match-meta">⚡ ${stageLabel} • ${m.time} • 📍 ${m.hostCity}</span>
             ${statusBadge}
           </div>
@@ -1532,7 +1538,7 @@ function renderSpecialPredictions() {
           </select>
           <input type="text" class="form-input" id="topScorerOtherInput" value="${tsIsOther ? tsSelected : ''}" oninput="markUnsavedPrediction('special:topScorer')"
             placeholder="שם השחקן" style="${tsIsOther ? '' : 'display:none'}">
-          <div style="font-size:11px;color:var(--danger);margin-top:4px;font-weight:600">⏰ ייסגר אוטומטית ב-11.6 בשעה 22:00</div>
+          <div style="font-size:11px;color:var(--blue-light);margin-top:4px;font-weight:600">⏰ ייסגר אוטומטית ב-11.6 בשעה 22:00</div>
           <button class="btn btn-primary btn-sm btn-full" style="margin-top:10px" onclick="saveTopScorer()">שמור מלך שערים</button>
         `}
       </div>
