@@ -136,6 +136,35 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .rank-medal-1{color:var(--yellow-dark);font-weight:900}
 .rank-medal-2{color:#9CA3AF;font-weight:900}
 .rank-medal-3{color:var(--text2);font-weight:900}
+.leaderboard-card{margin-top:16px}
+.leaderboard-list{display:flex;flex-direction:column}
+.leaderboard-row{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);background:white}
+.leaderboard-row:last-child{border-bottom:none}
+.leaderboard-row.me{background:#FFFBE6}
+.leaderboard-rank-icon{width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:'Rubik',sans-serif;font-size:13px;font-weight:900;border:1px solid var(--border);background:#F3F4F6;color:var(--blue)}
+.leaderboard-rank-icon.rank-1{background:var(--yellow);border-color:var(--yellow-dark);color:var(--blue);font-size:18px;box-shadow:0 0 0 3px rgba(245,197,24,.18)}
+.leaderboard-rank-icon.rank-2{background:#F3F4F6;border-color:#9CA3AF;color:var(--blue)}
+.leaderboard-rank-icon.rank-3{background:var(--blue-pale);border-color:var(--blue-light);color:var(--blue)}
+.leaderboard-name{font-size:14px;font-weight:800;color:var(--blue);line-height:1.2}
+.leaderboard-team{font-size:11px;color:var(--yellow-dark);font-weight:700;margin-top:3px}
+.leaderboard-score{text-align:left;font-family:'Rubik',sans-serif;font-size:18px;font-weight:900;color:var(--blue)}
+.leaderboard-score-label{display:block;font-family:'Heebo',sans-serif;font-size:10px;font-weight:600;color:var(--text3);margin-top:1px}
+.dashboard-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.dashboard-action{min-height:58px;border:1px solid var(--border);border-radius:var(--radius-sm);background:white;color:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:800;box-shadow:var(--shadow)}
+.dashboard-action strong{font-family:'Rubik',sans-serif;font-size:18px;line-height:1}
+.panel-card{margin-bottom:16px}
+.panel-match{padding:14px 16px;border-bottom:1px solid var(--border);background:white}
+.panel-match:last-child{border-bottom:none}
+.panel-match-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.panel-match-meta{font-size:11px;color:var(--text3);font-weight:700}
+.panel-match-teams{font-size:14px;font-weight:900;color:var(--blue);line-height:1.35;margin-bottom:10px}
+.panel-score-line{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.panel-score-inputs{display:flex;align-items:center;gap:6px}
+.panel-score-input{width:42px;height:42px;border:2px solid var(--border);border-radius:var(--radius-sm);text-align:center;font-size:18px;font-weight:900;font-family:'Rubik',sans-serif;color:var(--blue);background:white}
+.panel-score-input:focus{outline:none;border-color:var(--blue-light);background:var(--blue-pale)}
+.panel-score-input:disabled{background:#F9FAFB;color:var(--text3)}
+.panel-empty{padding:22px 16px;text-align:center;color:var(--text3);font-size:13px;font-weight:600}
+@media(max-width:390px){.dashboard-actions{grid-template-columns:1fr}.panel-score-line{align-items:flex-start;flex-direction:column}.panel-score-input{width:46px}}
 
 /* Admin */
 .admin-nav{background:var(--blue);padding:8px;display:flex;gap:4px;overflow-x:auto}
@@ -723,6 +752,39 @@ function getLeaderboard() {
     .map((u,i) => ({...u, rank: i+1}));
 }
 
+function getRankIcon(rank) {
+  if (rank === 1) return '🏆';
+  if (rank === 2) return '2';
+  if (rank === 3) return '3';
+  return '#' + rank;
+}
+
+function renderLeaderboardList({showDetails=false}={}) {
+  const lb = getLeaderboard();
+  if (!lb.length) {
+    return `
+      <div class="empty-state" style="padding:24px 12px">
+        <div class="empty-icon">🏆</div>
+        <div class="empty-text">אין עדיין משתתפים בדירוג</div>
+      </div>`;
+  }
+
+  return `
+    <div class="leaderboard-list">
+      ${lb.map(u => `
+        <div class="leaderboard-row${u.id === currentUser?.id ? ' me' : ''}">
+          <span class="leaderboard-rank-icon rank-${u.rank <= 3 ? u.rank : 'default'}">${getRankIcon(u.rank)}</span>
+          <div>
+            <div class="leaderboard-name">${u.fullName || u.displayName || 'משתמש'}</div>
+            ${u.teamName ? `<div class="leaderboard-team">${u.teamName}</div>` : ''}
+            ${showDetails ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">מדויק: ${u.exactCount || 0} · כיוון: ${u.outcomeCount || 0} · בונוס: ${u.bonusScore || 0}</div>` : ''}
+          </div>
+          <div class="leaderboard-score">${u.totalScore || 0}<span class="leaderboard-score-label">נק'</span></div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '';
   const [day, month] = dateStr.split('.');
@@ -1199,6 +1261,30 @@ function renderDashboard() {
       </div>`;
   }).join('');
 
+  const upcomingPanel = upcoming.slice(0, 5);
+  const upcomingHtml = upcomingPanel.map(m => {
+    const pred = preds.find(p => p.matchId === m.id);
+    const locked = matchIsLocked(m);
+    const hv = pred?.predictedHomeScore !== null && pred?.predictedHomeScore !== undefined ? pred.predictedHomeScore : '';
+    const av = pred?.predictedAwayScore !== null && pred?.predictedAwayScore !== undefined ? pred.predictedAwayScore : '';
+    return `
+      <div class="panel-match">
+        <div class="panel-match-head">
+          <span class="panel-match-meta">${formatDate(m.date)} • ${m.time} • ${m.hostCity}</span>
+          <span class="status-badge ${locked ? 'status-locked' : 'status-open'}">${locked ? 'נעול' : 'פתוח לניחוש'}</span>
+        </div>
+        <div class="panel-match-teams">${m.homeTeam} נגד ${m.awayTeam}</div>
+        <div class="panel-score-line">
+          <div class="panel-score-inputs">
+            <input type="number" class="panel-score-input" min="0" max="20" id="dash_h_${m.id}" value="${hv}" ${locked?'disabled':''} placeholder="0" oninput="autoSaveDashboardPred('${m.id}')">
+            <span class="score-sep">:</span>
+            <input type="number" class="panel-score-input" min="0" max="20" id="dash_a_${m.id}" value="${av}" ${locked?'disabled':''} placeholder="0" oninput="autoSaveDashboardPred('${m.id}')">
+          </div>
+          ${locked ? `<span style="font-size:12px;color:var(--text3);font-weight:700">${pred?.submittedAt ? 'נשמר' : 'לא ניחשת'}</span>` : `<button class="btn btn-primary btn-sm" onclick="saveDashboardPrediction('${m.id}')">שמור ניחוש</button>`}
+        </div>
+      </div>`;
+  }).join('');
+
   const statsHtml = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
       <div class="card" style="text-align:center;padding:14px 8px">
@@ -1215,9 +1301,45 @@ function renderDashboard() {
       </div>
     </div>`;
 
+  const dashboardActionsHtml = `
+    <div class="dashboard-actions">
+      <button class="dashboard-action" onclick="navTo('predictions')"><strong>${missing}</strong><span>ניחושים חסרים</span></button>
+      <button class="dashboard-action" onclick="navTo('special')"><strong>★</strong><span>בונוסים</span></button>
+      <button class="dashboard-action" onclick="navTo('leaderboard')"><strong>${rank}</strong><span>המקום שלך</span></button>
+    </div>`;
+
+  const upcomingMatchesHtml = `
+    <div class="card panel-card">
+      <div class="card-header">
+        <span class="card-title">משחקים קרובים</span>
+        <button class="btn btn-secondary btn-sm" onclick="navTo('predictions')">כל המשחקים</button>
+      </div>
+      <div class="card-body" style="padding:0">
+        ${upcomingHtml || '<div class="panel-empty">אין כרגע משחקים קרובים פתוחים לניחוש</div>'}
+      </div>
+    </div>`;
+
+  const dashboardResultsHtml = `
+    <div class="card panel-card">
+      <div class="card-header"><span class="card-title">תוצאות ומשחקים אחרונים</span></div>
+      <div class="card-body" style="padding:${recentHtml ? '0 16px' : '0'}">
+        ${recentHtml || '<div class="panel-empty">עדיין אין תוצאות. המשחק הראשון יופיע כאן אחרי עדכון תוצאה.</div>'}
+      </div>
+    </div>`;
+
+  const dashboardLeaderboardHtml = `
+    <div class="card leaderboard-card">
+      <div class="card-header">
+        <span class="card-title">🏆 דירוג כל המשתתפים</span>
+        <span style="font-size:12px;color:var(--text3);font-weight:600">${total} משתתפים</span>
+      </div>
+      <div class="card-body" style="padding:0">${renderLeaderboardList()}</div>
+    </div>`;
+
   return `
     ${countdownHtml}
     ${statsHtml}
+    ${dashboardActionsHtml}
     ${missing > 0 ? `
     <div style="background:var(--yellow-pale);border:1px solid var(--yellow);border-radius:var(--radius);padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
       <span style="font-size:24px">⚠️</span>
@@ -1227,16 +1349,10 @@ function renderDashboard() {
       </div>
       <button class="btn btn-primary btn-sm" style="margin-right:auto" onclick="navTo('predictions')">נחש עכשיו</button>
     </div>` : ''}
-    ${scored.length > 0 ? `
-    <div class="card">
-      <div class="card-header"><span class="card-title">📊 תוצאות אחרונות</span></div>
-      <div class="card-body" style="padding:0 16px">${recentHtml}</div>
-    </div>` : `
-    <div class="empty-state">
-      <div class="empty-icon">⚽</div>
-      <div class="empty-text">הטורניר עוד לא התחיל</div>
-      <div class="empty-hint">המשחק הראשון ב-11.6 • מקסיקו נגד דרום אפריקה</div>
-    </div>`}`;
+    ${upcomingMatchesHtml}
+    ${dashboardResultsHtml}
+    ${dashboardLeaderboardHtml}
+  `;
 }
 
 let countdownInterval = null;
@@ -1506,6 +1622,46 @@ window.autoSavePred = function(matchId) {
   markUnsavedPrediction('match:' + matchId);
 };
 
+window.autoSaveDashboardPred = function(matchId) {
+  markUnsavedPrediction('match:' + matchId);
+};
+
+window.saveDashboardPrediction = function(matchId) {
+  const match = loadData('matches', []).find(m => m.id === matchId);
+  if (!match || match.status !== 'open' || matchIsLocked(match)) {
+    showToast('המשחק נעול לניחושים');
+    return;
+  }
+
+  const h = parseInt(document.getElementById('dash_h_'+matchId)?.value);
+  const a = parseInt(document.getElementById('dash_a_'+matchId)?.value);
+  if (isNaN(h) || isNaN(a) || h < 0 || a < 0) {
+    showToast('נא להזין תוצאה תקינה');
+    return;
+  }
+
+  let preds = loadData('predictions', []);
+  const existing = preds.find(p => p.userId === currentUser.id && p.matchId === matchId);
+  if (existing) {
+    existing.predictedHomeScore = h;
+    existing.predictedAwayScore = a;
+    existing.predictedOutcome = getOutcome(h,a);
+    existing.submittedAt = Date.now();
+  } else {
+    preds.push({
+      id: uid(), userId: currentUser.id, matchId,
+      predictedHomeScore: h, predictedAwayScore: a,
+      predictedOutcome: getOutcome(h,a),
+      predictedAdvancingTeam: null,
+      scoreAwarded: 0, isExact: false, isOutcomeCorrect: false,
+      submittedAt: Date.now()
+    });
+  }
+  saveData('predictions', preds);
+  clearUnsavedPrediction('match:' + matchId);
+  showToast('הניחוש נשמר');
+};
+
 // ============================================================
 // SPECIAL PREDICTIONS
 // ============================================================
@@ -1626,13 +1782,13 @@ function renderSpecialPredictions() {
 
     <!-- SEMI FINAL WINNERS -->
     ${sfteams.length > 0 ? stageCard(
-      'pred_sf1_winner', 'מנצחת חצי גמר 1', '🥇', SCORING.knockoutStageWinner,
+      'pred_sf1_winner', 'מנצחת חצי גמר 1', '🏆', SCORING.knockoutStageWinner,
       firstMatchLabel('semi_final'),
       matchIsLocked(koMatches.filter(m=>m.stage==='semi_final').sort((a,b)=>a.startsAt-b.startsAt)[0]||{startsAt:Infinity}),
       mySpecial.sf1_winner || '', sfteams, '-- בחר מנצחת חצי גמר 1 --'
     ) : ''}
     ${sfteams.length > 1 ? stageCard(
-      'pred_sf2_winner', 'מנצחת חצי גמר 2', '🥇', SCORING.knockoutStageWinner,
+      'pred_sf2_winner', 'מנצחת חצי גמר 2', '🏆', SCORING.knockoutStageWinner,
       firstMatchLabel('semi_final'),
       matchIsLocked(koMatches.filter(m=>m.stage==='semi_final').sort((a,b)=>a.startsAt-b.startsAt)[0]||{startsAt:Infinity}),
       mySpecial.sf2_winner || '', sfteams, '-- בחר מנצחת חצי גמר 2 --'
@@ -1772,9 +1928,8 @@ function renderLeaderboard() {
   
   const rows = lb.map(u => `
     <tr class="${u.id === currentUser?.id ? 'me' : ''}">
-      <td style="font-weight:700;font-size:16px;font-family:'Rubik'"
-        class="${u.rank===1?'rank-medal-1':u.rank===2?'rank-medal-2':u.rank===3?'rank-medal-3':''}">
-        ${u.rank===1?'🥇':u.rank===2?'🥈':u.rank===3?'🥉':'#'+u.rank}
+      <td>
+        <span class="leaderboard-rank-icon rank-${u.rank <= 3 ? u.rank : 'default'}">${getRankIcon(u.rank)}</span>
       </td>
       <td>
         <div style="font-weight:700;font-size:14px;color:var(--blue)">${u.fullName || u.displayName}</div>
