@@ -20,8 +20,8 @@
 /* Logo SVG inline */
 .logo-img{width:44px;height:44px;display:block}
 body{font-family:'Heebo',sans-serif;background:#040D1F;color:var(--text);min-height:100vh;direction:rtl;position:relative;overflow-x:hidden}
-body::before{content:"";position:fixed;inset:0;background:url("assets/login-fans-bg.png") center/cover no-repeat;opacity:.16;animation:appBgOpacity 12s ease-in-out infinite;pointer-events:none;z-index:0}
-body::after{content:"";position:fixed;inset:0;background:linear-gradient(160deg,rgba(4,13,31,.68) 0%,rgba(245,197,24,.26) 42%,rgba(255,251,230,.9) 100%);pointer-events:none;z-index:0}
+body::before{content:"";position:fixed;inset:0;background:url("assets/login-fans-bg.png") center/cover no-repeat;opacity:.24;animation:appBgOpacity 12s ease-in-out infinite;pointer-events:none;z-index:0}
+body::after{content:"";position:fixed;inset:0;background:linear-gradient(160deg,rgba(4,13,31,.58) 0%,rgba(245,197,24,.32) 42%,rgba(255,251,230,.82) 100%);pointer-events:none;z-index:0}
 #app,.toast{position:relative;z-index:1}
 h1,h2,h3{font-family:'Rubik',sans-serif}
 button{cursor:pointer;font-family:'Heebo',sans-serif}
@@ -59,18 +59,22 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .nav-item-wrap{position:relative}
 
 /* Cards */
-.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden}
+.card{background:rgba(255,255,255,.93);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid rgba(197,213,240,.82);overflow:hidden;backdrop-filter:blur(8px)}
 .card-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .card-title{font-size:15px;font-weight:700;color:var(--text)}
 .card-body{padding:16px}
 
 /* Match Card */
-.match-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);margin-bottom:12px;overflow:hidden}
+.match-card{background:rgba(255,255,255,.94);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid rgba(197,213,240,.86);margin-bottom:12px;overflow:hidden;backdrop-filter:blur(8px)}
 .match-card-header{background:linear-gradient(135deg,var(--blue) 0%,#1A4A8A 100%);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--yellow)}
 .match-meta{font-size:11px;color:var(--yellow);font-weight:600}
 .match-body{padding:14px}
 .match-teams{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
 .team-name{font-size:14px;font-weight:700;text-align:center;flex:1;line-height:1.3}
+.team-label{display:inline-flex;align-items:center;justify-content:center;gap:6px;vertical-align:middle}
+.country-flag{font-size:1.16em;line-height:1;filter:saturate(1.08)}
+.country-flag-img{width:22px;height:16px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(13,36,81,.14);background:white;flex:0 0 auto}
+.team-label-name{min-width:0}
 .vs-divider{font-size:12px;font-weight:700;color:var(--text3);padding:0 6px}
 .score-inputs{display:flex;align-items:center;justify-content:center;gap:8px}
 .score-input{width:52px;height:52px;border:2px solid var(--border);border-radius:var(--radius-sm);text-align:center;font-size:22px;font-weight:700;font-family:'Rubik',sans-serif;color:var(--blue);background:white;transition:.2s}
@@ -113,9 +117,9 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .login-page::after{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(4,13,31,.82) 0%,rgba(13,36,81,.5) 50%,rgba(7,21,48,.82) 100%);z-index:0}
 .login-card{background:white;border-radius:20px;padding:32px 28px;width:calc(100vw - 32px);max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5);border-top:4px solid var(--yellow);position:relative;z-index:1}
 @keyframes loginBgOpacity{0%,100%{opacity:.28}50%{opacity:.48}}
-@keyframes appBgOpacity{0%,100%{opacity:.12}50%{opacity:.28}}
+@keyframes appBgOpacity{0%,100%{opacity:.2}50%{opacity:.34}}
 @media (prefers-reduced-motion:reduce){.login-page::before{animation:none;opacity:.38}}
-@media (prefers-reduced-motion:reduce){body::before{animation:none;opacity:.18}}
+@media (prefers-reduced-motion:reduce){body::before{animation:none;opacity:.26}}
 .login-logo{text-align:center;margin-bottom:28px}
 .login-ball{font-size:52px;margin-bottom:8px}
 .login-title{font-family:'Rubik',sans-serif;font-size:24px;font-weight:900;color:var(--blue);line-height:1.2}
@@ -149,22 +153,39 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .leaderboard-team{font-size:11px;color:var(--yellow-dark);font-weight:700;margin-top:3px}
 .leaderboard-score{text-align:left;font-family:'Rubik',sans-serif;font-size:18px;font-weight:900;color:var(--blue)}
 .leaderboard-score-label{display:block;font-family:'Heebo',sans-serif;font-size:10px;font-weight:600;color:var(--text3);margin-top:1px}
-.dashboard-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
-.dashboard-action{min-height:58px;border:1px solid var(--border);border-radius:var(--radius-sm);background:white;color:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:800;box-shadow:var(--shadow)}
+.dashboard-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,rgba(13,36,81,.97) 0%,rgba(26,74,138,.9) 56%,rgba(245,197,24,.88) 100%);color:white;border:1px solid rgba(255,255,255,.28);border-bottom:3px solid var(--yellow);border-radius:var(--radius);box-shadow:0 18px 42px rgba(13,36,81,.24);padding:18px;margin-bottom:16px}
+.dashboard-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 0 58%,rgba(255,255,255,.16) 58% 59%,transparent 59% 100%);opacity:.7;pointer-events:none}
+.dashboard-hero-inner{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(330px,.8fr);gap:18px;align-items:center}
+.dashboard-eyebrow{font-size:12px;font-weight:800;color:var(--yellow);margin-bottom:4px}
+.dashboard-title{font-family:'Rubik',sans-serif;font-size:28px;font-weight:900;line-height:1.05;margin-bottom:8px}
+.dashboard-subtitle{font-size:13px;color:rgba(255,255,255,.78);font-weight:600}
+.dashboard-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.dashboard-kpi{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);padding:12px;text-align:center;backdrop-filter:blur(6px)}
+.dashboard-kpi strong{display:block;font-family:'Rubik',sans-serif;font-size:28px;font-weight:900;line-height:1;color:white}
+.dashboard-kpi span{display:block;font-size:11px;color:rgba(255,255,255,.74);font-weight:700;margin-top:5px}
+.dashboard-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.dashboard-action{min-height:68px;border:1px solid rgba(197,213,240,.9);border-radius:var(--radius-sm);background:rgba(255,255,255,.92);color:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:800;box-shadow:var(--shadow);backdrop-filter:blur(8px)}
 .dashboard-action strong{font-family:'Rubik',sans-serif;font-size:18px;line-height:1}
+.dashboard-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:16px;align-items:start}
+.dashboard-main,.dashboard-side{min-width:0}
+.dashboard-side{position:sticky;top:86px}
 .panel-card{margin-bottom:16px}
-.panel-match{padding:14px 16px;border-bottom:1px solid var(--border);background:white}
+.panel-match{padding:14px 16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.8)}
 .panel-match:last-child{border-bottom:none}
 .panel-match-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .panel-match-meta{font-size:11px;color:var(--text3);font-weight:700}
-.panel-match-teams{font-size:14px;font-weight:900;color:var(--blue);line-height:1.35;margin-bottom:10px}
+.panel-match-teams{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;font-weight:900;color:var(--blue);line-height:1.35;margin-bottom:10px}
+.panel-vs{font-size:11px;color:var(--text3);font-weight:800;white-space:nowrap}
 .panel-score-line{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .panel-score-inputs{display:flex;align-items:center;gap:6px}
 .panel-score-input{width:42px;height:42px;border:2px solid var(--border);border-radius:var(--radius-sm);text-align:center;font-size:18px;font-weight:900;font-family:'Rubik',sans-serif;color:var(--blue);background:white}
 .panel-score-input:focus{outline:none;border-color:var(--blue-light);background:var(--blue-pale)}
 .panel-score-input:disabled{background:#F9FAFB;color:var(--text3)}
 .panel-empty{padding:22px 16px;text-align:center;color:var(--text3);font-size:13px;font-weight:600}
-@media(max-width:390px){.dashboard-actions{grid-template-columns:1fr}.panel-score-line{align-items:flex-start;flex-direction:column}.panel-score-input{width:46px}}
+.notice-icon{width:30px;height:30px;border-radius:50%;background:var(--yellow);color:var(--blue);display:inline-flex;align-items:center;justify-content:center;font-family:'Rubik',sans-serif;font-weight:900;box-shadow:0 0 0 3px rgba(245,197,24,.18);flex:0 0 auto}
+@media(max-width:900px){.dashboard-hero-inner,.dashboard-grid{grid-template-columns:1fr}.dashboard-side{position:static}}
+@media(max-width:560px){.dashboard-title{font-size:23px}.dashboard-kpis{grid-template-columns:1fr 1fr}.dashboard-kpi:last-child{grid-column:1/-1}.dashboard-actions{grid-template-columns:1fr}.panel-match-teams{align-items:flex-start;flex-direction:column}.panel-vs{align-self:center}.team-label{justify-content:flex-start}}
+@media(max-width:390px){.panel-score-line{align-items:flex-start;flex-direction:column}.panel-score-input{width:46px}}
 
 /* Admin */
 .admin-nav{background:var(--blue);padding:8px;display:flex;gap:4px;overflow-x:auto}
@@ -189,7 +210,8 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 /* Countdown */
 .countdown-card{background:linear-gradient(135deg,var(--blue) 0%,#0D2451 100%);color:white;border-radius:var(--radius);padding:16px;margin-bottom:16px}
 .countdown-label{font-size:11px;opacity:.7;margin-bottom:6px}
-.countdown-match{font-size:16px;font-weight:700;margin-bottom:10px}
+.countdown-match{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:16px;font-weight:700;margin-bottom:10px}
+.countdown-match .panel-vs{color:rgba(255,255,255,.64);margin:0 4px}
 .countdown-timer{display:flex;gap:12px}
 .countdown-unit{text-align:center}
 .countdown-num{font-family:'Rubik',sans-serif;font-size:28px;font-weight:900;line-height:1;background:rgba(255,255,255,.15);border-radius:6px;padding:4px 10px;min-width:50px;display:block}
@@ -207,6 +229,7 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 
 /* Content area */
 .content{flex:1;padding:16px;max-width:700px;margin:0 auto;width:100%}
+.dashboard-content{max-width:1180px}
 
 /* Groups display */
 .groups-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
@@ -307,6 +330,108 @@ const GROUPS_DEF = {
   'י': ['ארגנטינה','אלג\'יריה','אוסטריה','ירדן'],
   'יא': ['פורטוגל','קונגו הדמוקרטית','אוזבקיסטן','קולומביה'],
   'יב': ['אנגליה','קרואטיה','גאנה','פנמה']
+};
+
+const COUNTRY_FLAGS = {
+  'מקסיקו':'🇲🇽',
+  'דרום קוריאה':'🇰🇷',
+  'צ\'כיה':'🇨🇿',
+  'דרום אפריקה':'🇿🇦',
+  'קנדה':'🇨🇦',
+  'בוסניה והרצגובינה':'🇧🇦',
+  'שווייץ':'🇨🇭',
+  'קטאר':'🇶🇦',
+  'ארה"ב':'🇺🇸',
+  'פראגוואי':'🇵🇾',
+  'אוסטרליה':'🇦🇺',
+  'טורקיה':'🇹🇷',
+  'ברזיל':'🇧🇷',
+  'מרוקו':'🇲🇦',
+  'האיטי':'🇭🇹',
+  'סקוטלנד':'🏴',
+  'גרמניה':'🇩🇪',
+  'קוראסאו':'🇨🇼',
+  'חוף השנהב':'🇨🇮',
+  'אקוודור':'🇪🇨',
+  'הולנד':'🇳🇱',
+  'יפן':'🇯🇵',
+  'שבדיה':'🇸🇪',
+  'טוניסיה':'🇹🇳',
+  'ספרד':'🇪🇸',
+  'כף ורדה':'🇨🇻',
+  'ערב הסעודית':'🇸🇦',
+  'אורוגוואי':'🇺🇾',
+  'בלגיה':'🇧🇪',
+  'מצרים':'🇪🇬',
+  'איראן':'🇮🇷',
+  'ניו זילנד':'🇳🇿',
+  'צרפת':'🇫🇷',
+  'סנגל':'🇸🇳',
+  'נורבגיה':'🇳🇴',
+  'עיראק':'🇮🇶',
+  'ארגנטינה':'🇦🇷',
+  'אלג\'יריה':'🇩🇿',
+  'אוסטריה':'🇦🇹',
+  'ירדן':'🇯🇴',
+  'פורטוגל':'🇵🇹',
+  'קונגו הדמוקרטית':'🇨🇩',
+  'אוזבקיסטן':'🇺🇿',
+  'קולומביה':'🇨🇴',
+  'אנגליה':'🏴',
+  'קרואטיה':'🇭🇷',
+  'גאנה':'🇬🇭',
+  'פנמה':'🇵🇦'
+};
+
+const COUNTRY_FLAG_CODES = {
+  'מקסיקו':'mx',
+  'דרום קוריאה':'kr',
+  'צ\'כיה':'cz',
+  'דרום אפריקה':'za',
+  'קנדה':'ca',
+  'בוסניה והרצגובינה':'ba',
+  'שווייץ':'ch',
+  'קטאר':'qa',
+  'ארה"ב':'us',
+  'פראגוואי':'py',
+  'אוסטרליה':'au',
+  'טורקיה':'tr',
+  'ברזיל':'br',
+  'מרוקו':'ma',
+  'האיטי':'ht',
+  'סקוטלנד':'gb-sct',
+  'גרמניה':'de',
+  'קוראסאו':'cw',
+  'חוף השנהב':'ci',
+  'אקוודור':'ec',
+  'הולנד':'nl',
+  'יפן':'jp',
+  'שבדיה':'se',
+  'טוניסיה':'tn',
+  'ספרד':'es',
+  'כף ורדה':'cv',
+  'ערב הסעודית':'sa',
+  'אורוגוואי':'uy',
+  'בלגיה':'be',
+  'מצרים':'eg',
+  'איראן':'ir',
+  'ניו זילנד':'nz',
+  'צרפת':'fr',
+  'סנגל':'sn',
+  'נורבגיה':'no',
+  'עיראק':'iq',
+  'ארגנטינה':'ar',
+  'אלג\'יריה':'dz',
+  'אוסטריה':'at',
+  'ירדן':'jo',
+  'פורטוגל':'pt',
+  'קונגו הדמוקרטית':'cd',
+  'אוזבקיסטן':'uz',
+  'קולומביה':'co',
+  'אנגליה':'gb-eng',
+  'קרואטיה':'hr',
+  'גאנה':'gh',
+  'פנמה':'pa'
 };
 
 const TOP_SCORER_OPTIONS = [
@@ -462,9 +587,14 @@ function findUserByLogin(users, value) {
 const USERS_API_URL = '/.netlify/functions/users';
 let userCloudSaveTimer = null;
 let userCloudSaveInProgress = false;
+let lastUsersCloudSyncOk = false;
 
 function shouldUseCloudUsers() {
   return typeof fetch === 'function' && location.protocol !== 'file:';
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function normalizeUserRecord(user) {
@@ -517,11 +647,16 @@ function mergeUserLists(...lists) {
 async function fetchUsersFromCloud() {
   if (!shouldUseCloudUsers()) return null;
   try {
-    const res = await fetch(USERS_API_URL, {cache:'no-store'});
-    if (!res.ok) return null;
+    const res = await fetch(`${USERS_API_URL}?ts=${Date.now()}`, {cache:'no-store'});
+    if (!res.ok) {
+      lastUsersCloudSyncOk = false;
+      return null;
+    }
     const data = await res.json();
+    lastUsersCloudSyncOk = true;
     return Array.isArray(data.users) ? data.users : [];
   } catch(err) {
+    lastUsersCloudSyncOk = false;
     console.warn('Could not load users from cloud', err);
     return null;
   }
@@ -529,6 +664,11 @@ async function fetchUsersFromCloud() {
 
 async function saveUsersToCloud(users, options={}) {
   if (!shouldUseCloudUsers()) return false;
+  let attempts = 0;
+  while (userCloudSaveInProgress && attempts < 20) {
+    await wait(100);
+    attempts++;
+  }
   if (userCloudSaveInProgress) return false;
   userCloudSaveInProgress = true;
   try {
@@ -537,8 +677,10 @@ async function saveUsersToCloud(users, options={}) {
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({users: mergeUserLists(users), replace: !!options.replace})
     });
+    lastUsersCloudSyncOk = res.ok;
     return res.ok;
   } catch(err) {
+    lastUsersCloudSyncOk = false;
     console.warn('Could not save users to cloud', err);
     return false;
   } finally {
@@ -554,11 +696,12 @@ function queueUsersCloudSave(users) {
 
 async function syncUsersFromCloud() {
   const cloudUsers = await fetchUsersFromCloud();
-  if (!cloudUsers) return;
+  if (!cloudUsers) return false;
   const localUsers = loadData('users', []);
   const merged = mergeUserLists(cloudUsers, localUsers);
   saveData('users', merged, {skipCloud:true});
   if (merged.length !== cloudUsers.length) queueUsersCloudSave(merged);
+  return true;
 }
 
 // ============================================================
@@ -726,6 +869,51 @@ function showToast(msg, duration=2200) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function escapeHtml(value) {
+  return (value ?? '').toString().replace(/[&<>"']/g, ch => ({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[ch]));
+}
+
+function teamFlag(team) {
+  return COUNTRY_FLAGS[(team || '').toString()] || '';
+}
+
+function teamFlagCode(team) {
+  return COUNTRY_FLAG_CODES[(team || '').toString()] || '';
+}
+
+function teamText(team) {
+  const name = (team || '').toString();
+  const flag = teamFlag(name);
+  return `${flag ? `${flag} ` : ''}${escapeHtml(name)}`;
+}
+
+function teamHtml(team) {
+  const name = (team || '').toString();
+  const flag = teamFlag(name);
+  const code = teamFlagCode(name);
+  const flagHtml = code
+    ? `<img class="country-flag-img" src="https://flagcdn.com/w40/${code}.png" srcset="https://flagcdn.com/w80/${code}.png 2x" alt="${flag || ''}" loading="lazy" onerror="this.outerHTML='<span class=&quot;country-flag&quot; aria-hidden=&quot;true&quot;>${flag}</span>'">`
+    : (flag ? `<span class="country-flag" aria-hidden="true">${flag}</span>` : '');
+  return `<span class="team-label">${flagHtml}<span class="team-label-name">${escapeHtml(name)}</span></span>`;
+}
+
+function matchupHtml(homeTeam, awayTeam, divider='נגד') {
+  return `
+    <span class="team-name">${teamHtml(homeTeam)}</span>
+    <span class="vs-divider">${escapeHtml(divider)}</span>
+    <span class="team-name">${teamHtml(awayTeam)}</span>`;
+}
+
+function panelMatchupHtml(homeTeam, awayTeam) {
+  return `${teamHtml(homeTeam)}<span class="panel-vs">נגד</span>${teamHtml(awayTeam)}`;
 }
 
 function matchIsLocked(match) {
@@ -1005,18 +1193,23 @@ function bindLoginPage() {
       if (email.includes('@') && !isValidEmail(email)) { showLoginError('נא להזין אימייל תקין'); return; }
       let users = loadData('users', []);
       let user = findUserByLogin(users, loginValue);
+      let syncOk = true;
       if (!user && shouldUseCloudUsers()) {
         const originalText = loginBtn.textContent;
         loginBtn.disabled = true;
         loginBtn.textContent = 'בודק...';
         try {
-          await syncUsersFromCloud();
+          syncOk = await syncUsersFromCloud();
           users = loadData('users', []);
           user = findUserByLogin(users, loginValue);
         } finally {
           loginBtn.disabled = false;
           loginBtn.textContent = originalText;
         }
+      }
+      if (!user && shouldUseCloudUsers() && !syncOk) {
+        showLoginError('רשימת המשתמשים המרכזית לא זמינה כרגע. ודא שהאתר פורסם עם תיקיית netlify וה-functions, ואז נסה שוב.');
+        return;
       }
       if (!user) { showLoginError('משתמש לא נמצא במערכת. פנה למנהל לרישום.'); return; }
       document.getElementById('loginError').innerHTML = '';
@@ -1141,7 +1334,7 @@ function renderUserShell() {
 
     <div style="flex:1;overflow-y:auto">
       <div class="page${currentPage==='dashboard'?' active':''}" id="page-dashboard">
-        <div class="content">${pages.dashboard}</div>
+        <div class="content dashboard-content">${pages.dashboard}</div>
       </div>
       <div class="page${currentPage==='predictions'?' active':''}" id="page-predictions">
         <div class="content">${pages.predictions}</div>
@@ -1221,7 +1414,7 @@ function renderDashboard() {
     countdownHtml = `
       <div class="countdown-card" id="countdown-card">
         <div class="countdown-label">⏱ המשחק הקרוב</div>
-        <div class="countdown-match">${nextMatch.homeTeam} נגד ${nextMatch.awayTeam}</div>
+        <div class="countdown-match">${panelMatchupHtml(nextMatch.homeTeam, nextMatch.awayTeam)}</div>
         <div style="font-size:11px;opacity:.6;margin-bottom:10px">${formatDate(nextMatch.date)} ${nextMatch.time} • ${nextMatch.hostCity}</div>
         <div class="countdown-timer">
           <div class="countdown-unit"><span class="countdown-num" id="cd-days">${days}</span><span class="countdown-label2">ימים</span></div>
@@ -1250,7 +1443,7 @@ function renderDashboard() {
     return `
       <div class="pred-row">
         <div>
-          <div style="font-size:13px;font-weight:600">${m.homeTeam} נ ${m.awayTeam}</div>
+          <div style="font-size:13px;font-weight:600">${teamHtml(m.homeTeam)} <span class="panel-vs">נגד</span> ${teamHtml(m.awayTeam)}</div>
           <div style="font-size:11px;color:var(--text3)">${formatDate(m.date)}</div>
         </div>
         <div style="text-align:left;display:flex;align-items:center;gap:8px">
@@ -1273,7 +1466,7 @@ function renderDashboard() {
           <span class="panel-match-meta">${formatDate(m.date)} • ${m.time} • ${m.hostCity}</span>
           <span class="status-badge ${locked ? 'status-locked' : 'status-open'}">${locked ? 'נעול' : 'פתוח לניחוש'}</span>
         </div>
-        <div class="panel-match-teams">${m.homeTeam} נגד ${m.awayTeam}</div>
+        <div class="panel-match-teams">${panelMatchupHtml(m.homeTeam, m.awayTeam)}</div>
         <div class="panel-score-line">
           <div class="panel-score-inputs">
             <input type="number" class="panel-score-input" min="0" max="20" id="dash_h_${m.id}" value="${hv}" ${locked?'disabled':''} placeholder="0" oninput="autoSaveDashboardPred('${m.id}')">
@@ -1286,18 +1479,18 @@ function renderDashboard() {
   }).join('');
 
   const statsHtml = `
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-      <div class="card" style="text-align:center;padding:14px 8px">
-        <div style="font-size:26px;font-weight:900;font-family:'Rubik';color:var(--blue)">${me?.totalScore || 0}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">ניקוד</div>
-      </div>
-      <div class="card" style="text-align:center;padding:14px 8px">
-        <div style="font-size:26px;font-weight:900;font-family:'Rubik';color:var(--yellow-dark)">#${rank}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">מקום מתוך ${total}</div>
-      </div>
-      <div class="card" style="text-align:center;padding:14px 8px;${missing>0?'border:2px solid var(--yellow)':''}">
-        <div style="font-size:26px;font-weight:900;font-family:'Rubik';color:${missing>0?'var(--blue)':'var(--success)'}">${missing}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">ניחושים חסרים</div>
+    <div class="dashboard-hero">
+      <div class="dashboard-hero-inner">
+        <div>
+          <div class="dashboard-eyebrow">פאנל המשחק שלך</div>
+          <div class="dashboard-title">היי ${escapeHtml(currentUser.displayName || currentUser.fullName || 'משתתף')}, הכל במקום אחד</div>
+          <div class="dashboard-subtitle">ניחושים קרובים, תוצאות אחרונות ודירוג כל המשתתפים בלי לרדוף אחרי מסכים.</div>
+        </div>
+        <div class="dashboard-kpis">
+          <div class="dashboard-kpi"><strong>${me?.totalScore || 0}</strong><span>ניקוד</span></div>
+          <div class="dashboard-kpi"><strong>#${rank}</strong><span>מקום מתוך ${total}</span></div>
+          <div class="dashboard-kpi"><strong>${missing}</strong><span>ניחושים חסרים</span></div>
+        </div>
       </div>
     </div>`;
 
@@ -1342,16 +1535,22 @@ function renderDashboard() {
     ${dashboardActionsHtml}
     ${missing > 0 ? `
     <div style="background:var(--yellow-pale);border:1px solid var(--yellow);border-radius:var(--radius);padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
-      <span style="font-size:24px">⚠️</span>
+      <span class="notice-icon">!</span>
       <div>
         <div style="font-size:14px;font-weight:700;color:var(--blue)">יש לך ${missing} ניחושים חסרים!</div>
         <div style="font-size:12px;color:var(--text2);margin-top:2px">המהר לנחש לפני נעילת המשחקים</div>
       </div>
       <button class="btn btn-primary btn-sm" style="margin-right:auto" onclick="navTo('predictions')">נחש עכשיו</button>
     </div>` : ''}
-    ${upcomingMatchesHtml}
-    ${dashboardResultsHtml}
-    ${dashboardLeaderboardHtml}
+    <div class="dashboard-grid">
+      <div class="dashboard-main">
+        ${upcomingMatchesHtml}
+        ${dashboardResultsHtml}
+      </div>
+      <aside class="dashboard-side">
+        ${dashboardLeaderboardHtml}
+      </aside>
+    </div>
   `;
 }
 
@@ -1429,9 +1628,7 @@ function renderPredictions() {
           </div>
           <div class="match-body">
             <div class="match-teams">
-              <span class="team-name">${m.homeTeam}</span>
-              <span class="vs-divider">נגד</span>
-              <span class="team-name">${m.awayTeam}</span>
+              ${matchupHtml(m.homeTeam, m.awayTeam)}
             </div>
             <div class="score-inputs">
               <input type="number" class="score-input" min="0" max="20" 
@@ -1448,7 +1645,7 @@ function renderPredictions() {
               ${resultBadge}
             </div>` : ''}
             <div class="match-footer">
-              <div style="font-size:11px;color:var(--text3)">${pred?.submittedAt ? '✅ נשמר' : (locked ? '⚠️ לא ניחשת' : '')}</div>
+              <div style="font-size:11px;color:var(--text3)">${pred?.submittedAt ? '✅ נשמר' : (locked ? 'לא ניחשת' : '')}</div>
               ${!locked && !isScored ? `<button class="btn btn-primary btn-sm" onclick="savePrediction('${m.id}')">שמור</button>` : ''}
             </div>
           </div>
@@ -1495,9 +1692,7 @@ function renderPredictions() {
           </div>
           <div class="match-body">
             <div class="match-teams">
-              <span class="team-name">${m.homeTeam}</span>
-              <span class="vs-divider">נגד</span>
-              <span class="team-name">${m.awayTeam}</span>
+              ${matchupHtml(m.homeTeam, m.awayTeam)}
             </div>
             <div class="score-inputs">
               <input type="number" class="score-input" min="0" max="20" 
@@ -1512,8 +1707,8 @@ function renderPredictions() {
             <div style="margin-top:10px">
               <select class="form-input" id="kadv_${m.id}" onchange="autoSaveKOPred('${m.id}')" style="font-size:13px">
                 <option value="${pred?.predictedAdvancingTeam||''}">-- מי עולה לשלב הבא? --</option>
-                <option value="${m.homeTeam}" ${pred?.predictedAdvancingTeam===m.homeTeam?'selected':''}>${m.homeTeam}</option>
-                <option value="${m.awayTeam}" ${pred?.predictedAdvancingTeam===m.awayTeam?'selected':''}>${m.awayTeam}</option>
+                <option value="${escapeHtml(m.homeTeam)}" ${pred?.predictedAdvancingTeam===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>
+                <option value="${escapeHtml(m.awayTeam)}" ${pred?.predictedAdvancingTeam===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>
               </select>
             </div>` : pred?.predictedAdvancingTeam ? `<div style="text-align:center;margin-top:6px;font-size:12px;color:var(--text2)">עולה: <strong>${pred.predictedAdvancingTeam}</strong></div>` : ''}
             ${m.actualHomeScore !== null ? `
@@ -1522,7 +1717,7 @@ function renderPredictions() {
               ${resultBadge}
             </div>` : ''}
             <div class="match-footer">
-              <div style="font-size:11px;color:var(--text3)">${pred?.submittedAt ? '✅ נשמר' : (locked ? '⚠️ לא ניחשת' : '')}</div>
+              <div style="font-size:11px;color:var(--text3)">${pred?.submittedAt ? '✅ נשמר' : (locked ? 'לא ניחשת' : '')}</div>
               ${!locked && !isScored ? `<button class="btn btn-primary btn-sm" onclick="saveKOPrediction('${m.id}')">שמור</button>` : ''}
             </div>
           </div>
@@ -1688,8 +1883,8 @@ function renderSpecialPredictions() {
 
   function stageCard(id, title, emoji, points, lockLabel, isLocked, selected, teamList, placeholder) {
     const opts = teamList.length > 0
-      ? teamList.map(t => `<option value="${t}" ${selected===t?'selected':''}>${t}</option>`).join('')
-      : allTeams.map(t => `<option value="${t}" ${selected===t?'selected':''}>${t}</option>`).join('');
+      ? teamList.map(t => `<option value="${escapeHtml(t)}" ${selected===t?'selected':''}>${teamText(t)}</option>`).join('')
+      : allTeams.map(t => `<option value="${escapeHtml(t)}" ${selected===t?'selected':''}>${teamText(t)}</option>`).join('');
     return `
       <div class="special-card" style="margin-bottom:12px">
         <div class="special-card-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -1697,11 +1892,11 @@ function renderSpecialPredictions() {
             <div class="special-card-title">${emoji} ${title}</div>
             <div style="font-size:11px;opacity:.7;margin-top:2px">בונוס: ${points} נקודות • ${lockLabel}</div>
           </div>
-          ${selected ? `<span class="winner-chip" style="background:rgba(245,197,24,.25);border-color:var(--yellow);color:var(--yellow)">🏆 ${selected}</span>` : ''}
+          ${selected ? `<span class="winner-chip" style="background:rgba(245,197,24,.25);border-color:var(--yellow);color:var(--yellow)">🏆 ${teamText(selected)}</span>` : ''}
         </div>
         <div class="special-card-body">
           ${isLocked ? `
-            <div style="font-size:14px;font-weight:600;color:var(--blue)">${selected || 'לא נבחר'}</div>
+            <div style="font-size:14px;font-weight:600;color:var(--blue)">${selected ? teamText(selected) : 'לא נבחר'}</div>
             <div class="status-badge status-locked" style="margin-top:8px;display:inline-flex">🔒 נעול</div>
           ` : `
             <select class="form-input" id="${id}" onchange="markUnsavedPrediction('special:${id}')" style="margin-bottom:8px">
@@ -1720,12 +1915,12 @@ function renderSpecialPredictions() {
       <div class="match-card" style="margin-bottom:8px">
         <div class="match-card-header">
           <span class="match-meta">בית ${grp}</span>
-          ${selected ? `<span class="winner-chip">🏆 ${selected}</span>` : '<span class="status-badge status-open">לא נבחר</span>'}
+          ${selected ? `<span class="winner-chip">🏆 ${teamText(selected)}</span>` : '<span class="status-badge status-open">לא נבחר</span>'}
         </div>
         <div class="match-body">
           <select class="form-input" id="gw_${grp}" ${groupsLocked?'disabled':''} onchange="markUnsavedPrediction('special:group_${grp}')" style="margin-bottom:8px">
             <option value="">-- בחר מנצחת בית ${grp} --</option>
-            ${teams.map(t => `<option value="${t}" ${selected===t?'selected':''}>${t}</option>`).join('')}
+            ${teams.map(t => `<option value="${escapeHtml(t)}" ${selected===t?'selected':''}>${teamText(t)}</option>`).join('')}
           </select>
           ${!groupsLocked ? `<button class="btn btn-primary btn-sm btn-full" onclick="saveGroupWinner('${grp}')">שמור בחירה</button>` : ''}
         </div>
@@ -1807,18 +2002,18 @@ function renderSpecialPredictions() {
         <div class="match-card" style="margin-bottom:8px">
           <div class="match-card-header">
             <span class="match-meta">⚡ רבע גמר ${i+1} • ${m.date} ${m.time}</span>
-            ${sel ? `<span class="winner-chip">🏆 ${sel}</span>` : '<span class="status-badge status-open">לא נבחר</span>'}
+            ${sel ? `<span class="winner-chip">🏆 ${teamText(sel)}</span>` : '<span class="status-badge status-open">לא נבחר</span>'}
           </div>
           <div class="match-body">
-            <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${m.homeTeam} נגד ${m.awayTeam}</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${teamHtml(m.homeTeam)} <span class="panel-vs">נגד</span> ${teamHtml(m.awayTeam)}</div>
             ${isLocked ? `
-              <div style="font-size:13px;font-weight:600">${sel || 'לא נבחר'}</div>
+              <div style="font-size:13px;font-weight:600">${sel ? teamText(sel) : 'לא נבחר'}</div>
               <span class="status-badge status-locked" style="margin-top:6px;display:inline-flex">🔒 נעול</span>
             ` : `
               <select class="form-input" id="pred_${key}" onchange="markUnsavedPrediction('special:${key}')" style="margin-bottom:8px">
                 <option value="">-- מי תנצח? --</option>
-                <option value="${m.homeTeam}" ${sel===m.homeTeam?'selected':''}>${m.homeTeam}</option>
-                <option value="${m.awayTeam}" ${sel===m.awayTeam?'selected':''}>${m.awayTeam}</option>
+                <option value="${escapeHtml(m.homeTeam)}" ${sel===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>
+                <option value="${escapeHtml(m.awayTeam)}" ${sel===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>
               </select>
               <button class="btn btn-primary btn-sm btn-full" onclick="saveStageWinner('pred_${key}','${key}')">שמור</button>
             `}
@@ -1839,18 +2034,18 @@ function renderSpecialPredictions() {
         <div class="match-card" style="margin-bottom:8px">
           <div class="match-card-header">
             <span class="match-meta">⚡ שמינית גמר ${i+1} • ${m.date} ${m.time}</span>
-            ${sel ? `<span class="winner-chip">🏆 ${sel}</span>` : '<span class="status-badge status-open">לא נבחר</span>'}
+            ${sel ? `<span class="winner-chip">🏆 ${teamText(sel)}</span>` : '<span class="status-badge status-open">לא נבחר</span>'}
           </div>
           <div class="match-body">
-            <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${m.homeTeam} נגד ${m.awayTeam}</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${teamHtml(m.homeTeam)} <span class="panel-vs">נגד</span> ${teamHtml(m.awayTeam)}</div>
             ${isLocked ? `
-              <div style="font-size:13px;font-weight:600">${sel || 'לא נבחר'}</div>
+              <div style="font-size:13px;font-weight:600">${sel ? teamText(sel) : 'לא נבחר'}</div>
               <span class="status-badge status-locked" style="margin-top:6px;display:inline-flex">🔒 נעול</span>
             ` : `
               <select class="form-input" id="pred_${key}" onchange="markUnsavedPrediction('special:${key}')" style="margin-bottom:8px">
                 <option value="">-- מי תנצח? --</option>
-                <option value="${m.homeTeam}" ${sel===m.homeTeam?'selected':''}>${m.homeTeam}</option>
-                <option value="${m.awayTeam}" ${sel===m.awayTeam?'selected':''}>${m.awayTeam}</option>
+                <option value="${escapeHtml(m.homeTeam)}" ${sel===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>
+                <option value="${escapeHtml(m.awayTeam)}" ${sel===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>
               </select>
               <button class="btn btn-primary btn-sm btn-full" onclick="saveStageWinner('pred_${key}','${key}')">שמור</button>
             `}
@@ -2095,9 +2290,7 @@ function renderAdminResults() {
         </div>
         <div class="match-body">
           <div class="match-teams" style="margin-bottom:10px">
-            <span class="team-name">${m.homeTeam}</span>
-            <span class="vs-divider">נגד</span>
-            <span class="team-name">${m.awayTeam}</span>
+            ${matchupHtml(m.homeTeam, m.awayTeam)}
           </div>
           <div style="display:flex;align-items:center;gap:8px;justify-content:center">
             <input type="number" min="0" max="20" class="score-input" style="width:52px" 
@@ -2289,10 +2482,10 @@ window.refreshAdminUsersFromCloud = async function(showMessage=true) {
   if (adminUsersRefreshInProgress) return;
   adminUsersRefreshInProgress = true;
   try {
-    await syncUsersFromCloud();
+    const syncOk = await syncUsersFromCloud();
     const panel = document.getElementById('apanel-users');
     if (panel && adminPanel === 'users') panel.innerHTML = renderAdminUsers();
-    if (showMessage) showToast('סטטוס המשתמשים עודכן');
+    if (showMessage) showToast(syncOk ? 'סטטוס המשתמשים עודכן' : 'הסנכרון המרכזי לא זמין כרגע. בדוק שה-functions פורסמו ב-Netlify.', syncOk ? 2200 : 4800);
   } finally {
     adminUsersRefreshInProgress = false;
   }
@@ -2311,6 +2504,7 @@ window.addUser = async function() {
   if (!email) { showToast('נא למלא אימייל'); return; }
   if (!isValidEmail(email)) { showToast('נא למלא אימייל תקין'); return; }
   
+  await syncUsersFromCloud();
   let users = loadData('users',[]);
   if (email && users.find(u => normalizeEmail(u.email) === email)) { showToast('אימייל כבר קיים במערכת'); return; }
   if (phone && users.find(u => phonesMatch(u.phone, phone))) { showToast('טלפון כבר קיים במערכת'); return; }
@@ -2362,8 +2556,8 @@ function renderAdminMatches() {
             <tr>
               <td>${m.date}</td>
               <td>${m.time}</td>
-              <td><strong>${m.homeTeam}</strong></td>
-              <td><strong>${m.awayTeam}</strong></td>
+              <td><strong>${teamHtml(m.homeTeam)}</strong></td>
+              <td><strong>${teamHtml(m.awayTeam)}</strong></td>
               <td style="font-size:11px">${m.hostCity}</td>
               <td><span class="status-badge status-open" style="font-size:10px">${m.stage==='group'?'בתים':m.stage}</span></td>
               <td><span class="status-badge ${m.status==='open'?'status-open':m.status==='scored'?'status-scored':'status-locked'}">${m.status==='open'?'פתוח':m.status==='scored'?'נוקד':m.status==='finished'?'הסתיים':'נעול'}</span></td>
@@ -2372,7 +2566,7 @@ function renderAdminMatches() {
       </table>
     </div>
     <div style="margin-top:16px">
-      <button class="btn btn-danger btn-sm" onclick="if(confirm('האם לאפס את כל המשחקים?'))resetMatches()">⚠️ אפס משחקים</button>
+      <button class="btn btn-danger btn-sm" onclick="if(confirm('האם לאפס את כל המשחקים?'))resetMatches()">אפס משחקים</button>
     </div>`;
 }
 
@@ -2396,14 +2590,14 @@ function renderAdminGroups() {
       <div class="card" style="margin-bottom:10px">
         <div class="card-header" style="padding:10px 14px">
           <span class="card-title" style="font-size:14px">בית ${grp}</span>
-          ${winner ? `<span class="winner-chip">🏆 ${winner}</span>` : ''}
+          ${winner ? `<span class="winner-chip">🏆 ${teamText(winner)}</span>` : ''}
         </div>
         <div style="padding:10px 14px">
-          <div style="font-size:12px;color:var(--text3);margin-bottom:6px">${teams.join(', ')}</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:6px">${teams.map(t => teamText(t)).join(', ')}</div>
           <div style="display:flex;gap:8px;align-items:center">
             <select class="form-input" style="flex:1;padding:8px" id="aw_${grp}">
               <option value="">-- מנצחת בית ${grp} --</option>
-              ${teams.map(t => `<option value="${t}" ${winner===t?'selected':''}>${t}</option>`).join('')}
+              ${teams.map(t => `<option value="${escapeHtml(t)}" ${winner===t?'selected':''}>${teamText(t)}</option>`).join('')}
             </select>
             <button class="btn btn-primary btn-sm" onclick="setGroupWinner('${grp}')">שמור</button>
           </div>
@@ -2651,9 +2845,7 @@ function renderAdminKnockout() {
         </div>
         <div class="match-body">
           <div class="match-teams" style="margin-bottom:10px">
-            <span class="team-name">${m.homeTeam}</span>
-            <span class="vs-divider">נגד</span>
-            <span class="team-name">${m.awayTeam}</span>
+            ${matchupHtml(m.homeTeam, m.awayTeam)}
           </div>
           <div style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap">
             <input type="number" min="0" class="score-input" style="width:52px" id="krh_${m.id}" value="${m.actualHomeScore??''}" placeholder="0">
@@ -2661,8 +2853,8 @@ function renderAdminKnockout() {
             <input type="number" min="0" class="score-input" style="width:52px" id="kra_${m.id}" value="${m.actualAwayScore??''}" placeholder="0">
             <select class="form-input" style="width:auto;padding:8px;flex:1" id="kradv_${m.id}">
               <option value="">-- מי עולה --</option>
-              <option value="${m.homeTeam}" ${m.advancingTeam===m.homeTeam?'selected':''}>${m.homeTeam}</option>
-              <option value="${m.awayTeam}" ${m.advancingTeam===m.awayTeam?'selected':''}>${m.awayTeam}</option>
+              <option value="${escapeHtml(m.homeTeam)}" ${m.advancingTeam===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>
+              <option value="${escapeHtml(m.awayTeam)}" ${m.advancingTeam===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>
             </select>
           </div>
           <div style="display:flex;gap:8px;margin-top:10px">
@@ -3006,6 +3198,7 @@ window.clearUsersPreview = function() {
 
 window.importUsers = async function(users=pendingUserImport) {
   if (!users || users.length === 0) { showToast('אין משתמשים לייבוא'); return; }
+  await syncUsersFromCloud();
   let existing = loadData('users', []);
   let added = 0, skipped = 0;
   const importedEmails = [];
@@ -3135,7 +3328,7 @@ function showMatchesPreview(matches) {
       <div class="preview-wrapper">
         <table class="preview-table">
           <thead><tr><th>תאריך</th><th>שעה</th><th>בית</th><th>חוץ</th><th>עיר</th></tr></thead>
-          <tbody>${matches.map(m => `<tr><td>${m.date}</td><td>${m.time}</td><td>${m.homeTeam}</td><td>${m.awayTeam}</td><td>${m.hostCity}</td></tr>`).join('')}</tbody>
+          <tbody>${matches.map(m => `<tr><td>${m.date}</td><td>${m.time}</td><td>${teamText(m.homeTeam)}</td><td>${teamText(m.awayTeam)}</td><td>${m.hostCity}</td></tr>`).join('')}</tbody>
         </table>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px">
