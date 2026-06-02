@@ -2312,6 +2312,7 @@ function renderAdminResults() {
   html += `
     <div style="margin-top:20px;padding:14px;background:var(--blue-pale);border-radius:var(--radius)">
       <button class="btn btn-primary btn-full" onclick="calcAllMatches()">🔄 חשב ניקוד לכל המשחקים שהסתיימו</button>
+      <button class="btn btn-danger btn-full" style="margin-top:10px" onclick="resetResultsAndScores()">אפס תוצאות וניקוד לסיום הבדיקה</button>
     </div>`;
   
   return html;
@@ -2422,6 +2423,56 @@ window.calcAllMatches = function() {
   showToast(`✅ ניקוד חושב עבור ${finished.length} משחקים`);
 };
 
+function resetMatchResult(match) {
+  return {
+    ...match,
+    status: 'open',
+    actualHomeScore: null,
+    actualAwayScore: null,
+    actualWinner: null,
+    advancingTeam: null,
+    scoredAt: null
+  };
+}
+
+function resetPredictionScore(pred) {
+  const clean = {...pred};
+  clean.scoreAwarded = 0;
+  clean.isExact = false;
+  clean.isOutcomeCorrect = false;
+  clean.scoredAt = null;
+  return clean;
+}
+
+window.resetResultsAndScores = async function() {
+  if (!confirm('לאפס את כל התוצאות והניקוד שחושבו בבדיקה? המשתמשים, הסיסמאות והניחושים יישארו.')) return;
+
+  const matches = loadData('matches', []).map(resetMatchResult);
+  const koMatches = loadData('knockoutMatches', []).map(resetMatchResult);
+  const predictions = loadData('predictions', []).map(resetPredictionScore);
+  const koPredictions = loadData('knockoutPredictions', []).map(resetPredictionScore);
+  const users = loadData('users', []).map(user => ({
+    ...user,
+    totalScore: 0,
+    exactCount: 0,
+    outcomeCount: 0,
+    bonusScore: 0
+  }));
+
+  saveData('matches', matches);
+  saveData('knockoutMatches', koMatches);
+  saveData('predictions', predictions);
+  saveData('knockoutPredictions', koPredictions);
+  saveData('actualGroupWinners', {});
+  saveData('actualTopScorer', '');
+  saveData('actualChampion', '');
+  saveData('users', users, {skipCloud:true});
+
+  const cloudSaved = await saveUsersToCloud(users, {replace:true});
+  showToast(cloudSaved || !shouldUseCloudUsers() ? 'תוצאות וניקוד אופסו' : 'תוצאות וניקוד אופסו בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע', cloudSaved ? 2400 : 4800);
+  switchAdminPanel('results');
+};
+
 // ============================================================
 // ADMIN: USERS
 // ============================================================
@@ -2436,6 +2487,7 @@ function renderAdminUsers() {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="refreshAdminUsersFromCloud()">רענן סטטוס</button>
         <button class="btn btn-secondary btn-sm" onclick="switchAdminPanel('upload-users')">ייבוא BULK</button>
+        <button class="btn btn-danger btn-sm" id="bulkDeleteUsersBtn" onclick="deleteSelectedUsers()" disabled>מחק נבחרים</button>
         <button class="btn btn-primary btn-sm" onclick="showAddUser()">+ הוסף משתמש</button>
       </div>
     </div>
@@ -2453,10 +2505,11 @@ function renderAdminUsers() {
     </div>
     <div style="overflow-x:auto">
       <table class="admin-table">
-        <thead><tr><th>שם מלא</th><th>שם קבוצה</th><th>אימייל</th><th>טלפון</th><th>סיסמה</th><th>ניקוד</th><th>מקום</th><th>פעולות</th></tr></thead>
+        <thead><tr><th><input type="checkbox" id="selectAllUsers" onchange="toggleAdminUsersSelection(this.checked)"></th><th>שם מלא</th><th>שם קבוצה</th><th>אימייל</th><th>טלפון</th><th>סיסמה</th><th>ניקוד</th><th>מקום</th><th>פעולות</th></tr></thead>
         <tbody>
           ${lb.map(u => `
             <tr>
+              <td><input type="checkbox" class="admin-user-select" value="${escapeHtml(u.id)}" onchange="updateBulkDeleteUsersButton()"></td>
               <td><strong>${u.fullName || u.displayName}</strong></td>
               <td style="color:var(--yellow-dark);font-weight:600">${u.teamName || '-'}</td>
               <td style="font-size:12px">${u.email || '-'}</td>
@@ -2530,14 +2583,62 @@ window.resetUserPassword = async function(userId) {
   switchAdminPanel('users');
 };
 
-window.deleteUser = async function(uid) {
-  if (!confirm('האם למחוק משתמש זה?')) return;
+function getSelectedAdminUserIds() {
+  return [...document.querySelectorAll('.admin-user-select:checked')].map(input => input.value);
+}
+
+window.toggleAdminUsersSelection = function(checked) {
+  document.querySelectorAll('.admin-user-select').forEach(input => { input.checked = checked; });
+  updateBulkDeleteUsersButton();
+};
+
+window.updateBulkDeleteUsersButton = function() {
+  const selected = getSelectedAdminUserIds();
+  const btn = document.getElementById('bulkDeleteUsersBtn');
+  const selectAll = document.getElementById('selectAllUsers');
+  const boxes = [...document.querySelectorAll('.admin-user-select')];
+  if (btn) {
+    btn.disabled = selected.length === 0;
+    btn.textContent = selected.length ? `מחק ${selected.length} נבחרים` : 'מחק נבחרים';
+  }
+  if (selectAll) {
+    selectAll.checked = boxes.length > 0 && selected.length === boxes.length;
+    selectAll.indeterminate = selected.length > 0 && selected.length < boxes.length;
+  }
+};
+
+function removeUserScopedData(userIds) {
+  const ids = new Set(userIds);
+  saveData('predictions', loadData('predictions', []).filter(p => !ids.has(p.userId)));
+  saveData('knockoutPredictions', loadData('knockoutPredictions', []).filter(p => !ids.has(p.userId)));
+  const specials = loadData('specialPredictions', {});
+  userIds.forEach(id => delete specials[id]);
+  saveData('specialPredictions', specials);
+}
+
+async function deleteUsersByIds(userIds, confirmText) {
+  const ids = [...new Set(userIds)].filter(Boolean);
+  if (!ids.length) { showToast('לא נבחרו משתמשים למחיקה'); return; }
+  if (!confirm(confirmText)) return;
   let users = loadData('users',[]);
-  users = users.filter(u => u.id !== uid);
+  const before = users.length;
+  users = users.filter(u => !ids.includes(u.id));
+  const deleted = before - users.length;
+  if (!deleted) { showToast('לא נמצאו משתמשים למחיקה'); return; }
+  removeUserScopedData(ids);
   saveData('users', users, {skipCloud:true});
   const cloudSaved = await saveUsersToCloud(users, {replace:true});
-  showToast(cloudSaved || !shouldUseCloudUsers() ? 'משתמש נמחק' : 'משתמש נמחק בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע', cloudSaved ? 2200 : 4800);
+  showToast(cloudSaved || !shouldUseCloudUsers() ? `${deleted} משתמשים נמחקו` : `${deleted} משתמשים נמחקו בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע`, cloudSaved ? 2200 : 4800);
   switchAdminPanel('users');
+}
+
+window.deleteSelectedUsers = async function() {
+  const ids = getSelectedAdminUserIds();
+  await deleteUsersByIds(ids, `למחוק ${ids.length} משתמשים שנבחרו? הפעולה תמחק גם את הניחושים שלהם.`);
+};
+
+window.deleteUser = async function(uid) {
+  await deleteUsersByIds([uid], 'האם למחוק משתמש זה? הפעולה תמחק גם את הניחושים שלו.');
 };
 
 // ============================================================
