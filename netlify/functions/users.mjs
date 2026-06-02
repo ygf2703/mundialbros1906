@@ -1,4 +1,4 @@
-import { getStore } from '@netlify/blobs';
+import { connectLambda, getStore } from '@netlify/blobs';
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -101,21 +101,27 @@ function mergeUsers(users) {
 export const handler = async event => {
   if (event.httpMethod === 'OPTIONS') return json(200, {ok: true});
 
-  const store = getStore('mundial-users');
+  try {
+    connectLambda(event);
+    const store = getStore('mundial-users');
 
-  if (event.httpMethod === 'GET') {
-    const users = await store.get('users', {type: 'json'});
-    return json(200, {users: Array.isArray(users) ? users : []});
+    if (event.httpMethod === 'GET') {
+      const users = await store.get('users', {type: 'json'});
+      return json(200, {users: Array.isArray(users) ? users : []});
+    }
+
+    if (event.httpMethod === 'POST') {
+      const payload = JSON.parse(event.body || '{}');
+      const incomingUsers = Array.isArray(payload.users) ? payload.users : [];
+      const existingUsers = payload.replace ? [] : (await store.get('users', {type: 'json'}));
+      const users = mergeUsers([...(Array.isArray(existingUsers) ? existingUsers : []), ...incomingUsers]);
+      await store.setJSON('users', users);
+      return json(200, {ok: true, count: users.length});
+    }
+
+    return json(405, {error: 'Method not allowed'});
+  } catch (error) {
+    console.error('Users function failed', error);
+    return json(500, {error: 'Users storage unavailable'});
   }
-
-  if (event.httpMethod === 'POST') {
-    const payload = JSON.parse(event.body || '{}');
-    const incomingUsers = Array.isArray(payload.users) ? payload.users : [];
-    const existingUsers = payload.replace ? [] : (await store.get('users', {type: 'json'}));
-    const users = mergeUsers([...(Array.isArray(existingUsers) ? existingUsers : []), ...incomingUsers]);
-    await store.setJSON('users', users);
-    return json(200, {ok: true, count: users.length});
-  }
-
-  return json(405, {error: 'Method not allowed'});
 };
