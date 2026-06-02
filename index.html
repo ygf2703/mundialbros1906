@@ -338,10 +338,38 @@ function normalizePhone(value) {
     .replace(/[^\d+]/g, '');
 }
 
+function phoneVariants(value) {
+  const phone = normalizePhone(value);
+  const digits = phone.replace(/\D/g, '');
+  const variants = new Set();
+  if (phone) variants.add(phone);
+  if (digits) variants.add(digits);
+
+  let local = '';
+  if (digits.startsWith('972') && digits.length >= 11) local = '0' + digits.slice(3);
+  else if (digits.startsWith('0')) local = digits;
+  else if (digits.startsWith('5') && digits.length === 9) local = '0' + digits;
+
+  if (local) {
+    variants.add(local);
+    if (local.startsWith('0')) {
+      variants.add('972' + local.slice(1));
+      variants.add('+972' + local.slice(1));
+    }
+  }
+  return [...variants].filter(Boolean);
+}
+
+function phonesMatch(a, b) {
+  const aVariants = phoneVariants(a);
+  const bVariants = new Set(phoneVariants(b));
+  return aVariants.length > 0 && aVariants.some(v => bVariants.has(v));
+}
+
 function canRevealAdminLoginForValue(value) {
   const email = normalizeEmail(value);
   const phone = normalizePhone(value);
-  return ADMIN_LOGIN_ALLOWED_EMAILS.includes(email) || ADMIN_LOGIN_ALLOWED_PHONES.includes(phone);
+  return ADMIN_LOGIN_ALLOWED_EMAILS.includes(email) || ADMIN_LOGIN_ALLOWED_PHONES.some(allowed => phonesMatch(allowed, phone));
 }
 
 function canRevealAdminLoginForUser(user) {
@@ -393,7 +421,7 @@ function findUserByLogin(users, value) {
   }
   const phone = normalizePhone(value);
   if (phone) {
-    const byPhone = users.find(u => normalizePhone(u.phone) === phone);
+    const byPhone = users.find(u => phonesMatch(u.phone, phone));
     if (byPhone) return byPhone;
   }
   return null;
@@ -431,8 +459,7 @@ function normalizeUserRecord(user) {
 
 function sameUserIdentity(a, b) {
   const aEmail = normalizeEmail(a.email), bEmail = normalizeEmail(b.email);
-  const aPhone = normalizePhone(a.phone), bPhone = normalizePhone(b.phone);
-  return (aEmail && bEmail && aEmail === bEmail) || (aPhone && bPhone && aPhone === bPhone) || (a.id && b.id && a.id === b.id);
+  return (aEmail && bEmail && aEmail === bEmail) || phonesMatch(a.phone, b.phone) || (a.id && b.id && a.id === b.id);
 }
 
 function mergeUserRecords(base, incoming) {
@@ -623,7 +650,7 @@ function initUsers() {
   seededUsers.forEach(seed => {
     const email = normalizeEmail(seed.email);
     const phone = normalizePhone(seed.phone);
-    const match = users.find(u => normalizeEmail(u.email) === email || (phone && normalizePhone(u.phone) === phone));
+    const match = users.find(u => normalizeEmail(u.email) === email || (phone && phonesMatch(u.phone, phone)));
     if (match) {
       const normalizedPhone = normalizePhone(match.phone);
       if (normalizeEmail(match.email) !== email || normalizedPhone !== phone) {
@@ -914,8 +941,21 @@ function bindLoginPage() {
       const phone = normalizePhone(loginValue);
       if (!email && !phone) { showLoginError('נא להזין אימייל או טלפון'); return; }
       if (email.includes('@') && !isValidEmail(email)) { showLoginError('נא להזין אימייל תקין'); return; }
-      const users = loadData('users', []);
-      const user = findUserByLogin(users, loginValue);
+      let users = loadData('users', []);
+      let user = findUserByLogin(users, loginValue);
+      if (!user && shouldUseCloudUsers()) {
+        const originalText = loginBtn.textContent;
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'בודק...';
+        try {
+          await syncUsersFromCloud();
+          users = loadData('users', []);
+          user = findUserByLogin(users, loginValue);
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.textContent = originalText;
+        }
+      }
       if (!user) { showLoginError('משתמש לא נמצא במערכת. פנה למנהל לרישום.'); return; }
       document.getElementById('loginError').innerHTML = '';
       showPasswordStep(user);
@@ -2118,7 +2158,7 @@ window.addUser = async function() {
   
   let users = loadData('users',[]);
   if (email && users.find(u => normalizeEmail(u.email) === email)) { showToast('אימייל כבר קיים במערכת'); return; }
-  if (phone && users.find(u => normalizePhone(u.phone) === phone)) { showToast('טלפון כבר קיים במערכת'); return; }
+  if (phone && users.find(u => phonesMatch(u.phone, phone))) { showToast('טלפון כבר קיים במערכת'); return; }
   
   users.push({id:'u'+uid(),fullName:name,displayName:name,teamName:teamName||'',email,phone,passwordHash:null,passwordSetAt:null,totalScore:0,exactCount:0,outcomeCount:0,bonusScore:0,createdAt:Date.now()});
   saveData('users', users, {skipCloud:true});
@@ -2817,7 +2857,7 @@ window.importUsers = async function(users=pendingUserImport) {
   users.forEach(u => {
     const email = normalizeEmail(u.email);
     const phone = normalizePhone(u.phone);
-    const dup = existing.find(e => (email && normalizeEmail(e.email)===email)||(phone && normalizePhone(e.phone)===phone));
+    const dup = existing.find(e => (email && normalizeEmail(e.email)===email)||(phone && phonesMatch(e.phone, phone)));
     if (dup) { skipped++; return; }
     existing.push({...u, email, phone, passwordHash:null, passwordSetAt:null, createdAt:u.createdAt || Date.now()});
     importedEmails.push(email);

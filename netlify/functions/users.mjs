@@ -30,6 +30,34 @@ function normalizePhone(value) {
   return cleanText(value).replace(/[^\d+]/g, '');
 }
 
+function phoneVariants(value) {
+  const phone = normalizePhone(value);
+  const digits = phone.replace(/\D/g, '');
+  const variants = new Set();
+  if (phone) variants.add(phone);
+  if (digits) variants.add(digits);
+
+  let local = '';
+  if (digits.startsWith('972') && digits.length >= 11) local = '0' + digits.slice(3);
+  else if (digits.startsWith('0')) local = digits;
+  else if (digits.startsWith('5') && digits.length === 9) local = '0' + digits;
+
+  if (local) {
+    variants.add(local);
+    if (local.startsWith('0')) {
+      variants.add('972' + local.slice(1));
+      variants.add('+972' + local.slice(1));
+    }
+  }
+  return [...variants].filter(Boolean);
+}
+
+function phonesMatch(a, b) {
+  const aVariants = phoneVariants(a);
+  const bVariants = new Set(phoneVariants(b));
+  return aVariants.length > 0 && aVariants.some(v => bVariants.has(v));
+}
+
 function sanitizeUser(user) {
   const now = Date.now();
   return {
@@ -52,9 +80,7 @@ function sanitizeUser(user) {
 function sameUser(a, b) {
   const aEmail = normalizeEmail(a.email);
   const bEmail = normalizeEmail(b.email);
-  const aPhone = normalizePhone(a.phone);
-  const bPhone = normalizePhone(b.phone);
-  return (aEmail && bEmail && aEmail === bEmail) || (aPhone && bPhone && aPhone === bPhone) || (a.id && b.id && a.id === b.id);
+  return (aEmail && bEmail && aEmail === bEmail) || phonesMatch(a.phone, b.phone) || (a.id && b.id && a.id === b.id);
 }
 
 function mergeUsers(users) {
