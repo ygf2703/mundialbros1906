@@ -2230,9 +2230,69 @@ function bindAdminShell() {
   document.getElementById('adminLogoutBtn').onclick = () => {
     isAdmin = false; currentUser = null; currentPage = 'login'; render();
   };
+  bindAdminActionDelegates();
   bindUploadUsers();
   bindUploadMatches();
   if (adminPanel === 'users') setTimeout(() => refreshAdminUsersFromCloud(false), 50);
+}
+
+let adminActionDelegatesBound = false;
+
+function bindAdminActionDelegates() {
+  if (adminActionDelegatesBound) return;
+  adminActionDelegatesBound = true;
+
+  document.addEventListener('click', async event => {
+    const btn = event.target.closest('[data-admin-action]');
+    if (!btn) return;
+    const app = document.getElementById('app');
+    if (app && !app.contains(btn)) return;
+
+    const action = btn.dataset.adminAction;
+    const userId = btn.dataset.userId;
+    const matchId = btn.dataset.matchId;
+    const actions = {
+      saveResult: () => window.saveResult(matchId),
+      calcMatch: () => window.calcMatch(matchId),
+      recalcMatch: () => window.recalcMatch(matchId),
+      calcAllMatches: () => window.calcAllMatches(),
+      resetResultsAndScores: () => window.resetResultsAndScores(),
+      deleteSelectedUsers: () => window.deleteSelectedUsers(),
+      deleteUser: () => window.deleteUser(userId),
+      resetUserPassword: () => window.resetUserPassword(userId)
+    };
+    const handler = actions[action];
+    if (!handler) return;
+
+    event.preventDefault();
+    if (btn.dataset.busy === '1') return;
+    btn.dataset.busy = '1';
+    const wasDisabled = btn.disabled;
+    btn.disabled = true;
+
+    try {
+      await handler();
+    } catch (err) {
+      console.error('Admin action failed', action, err);
+      showToast('שגיאה בביצוע הפעולה. נסה לרענן ולבצע שוב.', 4200);
+    } finally {
+      if (btn.isConnected) {
+        btn.disabled = wasDisabled;
+        delete btn.dataset.busy;
+      }
+    }
+  });
+
+  document.addEventListener('change', event => {
+    const target = event.target;
+    if (target.matches('[data-admin-users-select-all]')) {
+      window.toggleAdminUsersSelection(target.checked);
+      return;
+    }
+    if (target.matches('.admin-user-select')) {
+      window.updateBulkDeleteUsersButton();
+    }
+  });
 }
 
 window.switchAdminPanel = function(panel) {
@@ -2271,8 +2331,8 @@ function renderAdminResults() {
     <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">⚽ הזנת תוצאות אמת</h2>
     <p style="font-size:13px;color:var(--text2);margin-bottom:10px">הזן תוצאות משחקים שהסתיימו וחשב ניקוד למשתמשים</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px;background:rgba(255,214,10,.18);border:1px solid rgba(216,154,0,.22);border-radius:var(--radius)">
-      <button class="btn btn-primary btn-sm" onclick="calcAllMatches()">🔄 חשב ניקוד לכל המשחקים שהסתיימו</button>
-      <button class="btn btn-danger btn-sm" onclick="resetResultsAndScores()">אפס תוצאות וניקוד לסיום הבדיקה</button>
+      <button class="btn btn-primary btn-sm" type="button" data-admin-action="calcAllMatches">🔄 חשב ניקוד לכל המשחקים שהסתיימו</button>
+      <button class="btn btn-danger btn-sm" type="button" data-admin-action="resetResultsAndScores">אפס תוצאות וניקוד לסיום הבדיקה</button>
     </div>`;
   
   // Filter options
@@ -2304,8 +2364,8 @@ function renderAdminResults() {
               id="ra_${m.id}" value="${m.actualAwayScore !== null ? m.actualAwayScore : ''}" placeholder="0">
           </div>
           <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
-            <button class="btn btn-primary btn-sm" onclick="saveResult('${m.id}')">שמור תוצאה</button>
-            ${isSc ? `<button class="btn btn-secondary btn-sm" onclick="recalcMatch('${m.id}')">🔄 חשב מחדש</button>` : `<button class="btn btn-yellow btn-sm" onclick="calcMatch('${m.id}')">✓ חשב ניקוד</button>`}
+            <button class="btn btn-primary btn-sm" type="button" data-admin-action="saveResult" data-match-id="${escapeHtml(m.id)}">שמור תוצאה</button>
+            ${isSc ? `<button class="btn btn-secondary btn-sm" type="button" data-admin-action="recalcMatch" data-match-id="${escapeHtml(m.id)}">🔄 חשב מחדש</button>` : `<button class="btn btn-yellow btn-sm" type="button" data-admin-action="calcMatch" data-match-id="${escapeHtml(m.id)}">✓ חשב ניקוד</button>`}
           </div>
           ${isSc ? `<div style="text-align:center;font-size:12px;color:var(--success);margin-top:6px">✅ ניקוד חושב</div>` : ''}
         </div>
@@ -2344,16 +2404,11 @@ window.saveResult = function(matchId) {
   switchAdminPanel('results');
 };
 
-window.calcMatch = function(matchId) {
-  const matches = loadData('matches',[]);
-  const m = matches.find(x => x.id === matchId);
-  if (!m || m.actualHomeScore === null) { showToast('נא לשמור תוצאה קודם'); return; }
-  
-  let preds = loadData('predictions',[]);
-  let users = loadData('users',[]);
-  
+function scoreGroupMatchRecord(m, preds, users) {
+  if (!m || m.actualHomeScore === null || m.actualAwayScore === null) return false;
+
   preds.forEach(pred => {
-    if (pred.matchId !== matchId) return;
+    if (pred.matchId !== m.id) return;
     const old = pred.scoreAwarded || 0;
     const user = users.find(u => u.id === pred.userId);
     if (!user) return;
@@ -2378,14 +2433,52 @@ window.calcMatch = function(matchId) {
   
   m.status = 'scored';
   m.scoredAt = Date.now();
+  return true;
+}
+
+function readVisibleAdminResultsIntoMatches(matches) {
+  let updated = 0;
+  let invalid = 0;
+  matches.forEach(m => {
+    const homeInput = document.getElementById('rh_'+m.id);
+    const awayInput = document.getElementById('ra_'+m.id);
+    if (!homeInput || !awayInput) return;
+    const homeRaw = homeInput.value.trim();
+    const awayRaw = awayInput.value.trim();
+    if (!homeRaw && !awayRaw) return;
+    const h = Number(homeRaw);
+    const a = Number(awayRaw);
+    if (!Number.isInteger(h) || !Number.isInteger(a) || h < 0 || a < 0) {
+      invalid++;
+      return;
+    }
+    m.actualHomeScore = h;
+    m.actualAwayScore = a;
+    m.actualWinner = getOutcome(h,a);
+    if (m.status !== 'scored') m.status = 'finished';
+    updated++;
+  });
+  return {updated, invalid};
+}
+
+window.calcMatch = async function(matchId) {
+  const matches = loadData('matches',[]);
+  const m = matches.find(x => x.id === matchId);
+  if (!m || m.actualHomeScore === null) { showToast('נא לשמור תוצאה קודם'); return; }
+
+  let preds = loadData('predictions',[]);
+  let users = loadData('users',[]);
+  scoreGroupMatchRecord(m, preds, users);
+
   saveData('matches', matches);
   saveData('predictions', preds);
-  saveData('users', users);
+  saveData('users', users, {skipCloud:true});
+  await saveUsersToCloud(users, {replace:true});
   showToast('✅ ניקוד חושב לכל המשתמשים!');
   switchAdminPanel('results');
 };
 
-window.recalcMatch = function(matchId) {
+window.recalcMatch = async function(matchId) {
   // Reset scored status and recalculate
   const matches = loadData('matches',[]);
   const m = matches.find(x => x.id === matchId);
@@ -2406,19 +2499,38 @@ window.recalcMatch = function(matchId) {
   });
   
   m.status = 'finished';
-  saveData('matches', matches); saveData('predictions', preds); saveData('users', users);
-  
-  setTimeout(() => calcMatch(matchId), 50);
+  saveData('matches', matches);
+  saveData('predictions', preds);
+  saveData('users', users, {skipCloud:true});
+  await saveUsersToCloud(users, {replace:true});
+  await window.calcMatch(matchId);
 };
 
-window.calcAllMatches = function() {
+window.calcAllMatches = async function() {
   const matches = loadData('matches',[]);
-  const finished = matches.filter(m => m.status==='finished' && m.actualHomeScore !== null);
-  if (finished.length === 0) { showToast('אין משחקים שהסתיימו עם תוצאה'); return; }
-  finished.forEach(m => {
-    if (m.status !== 'scored') calcMatch(m.id);
+  const inputState = readVisibleAdminResultsIntoMatches(matches);
+  if (inputState.invalid > 0) {
+    showToast('יש תוצאות לא תקינות במסך. בדוק שהוזנו שני מספרים לכל משחק.', 4200);
+    return;
+  }
+
+  const ready = matches.filter(m => m.stage === 'group' && m.actualHomeScore !== null && m.actualAwayScore !== null);
+  if (ready.length === 0) { showToast('אין משחקים עם תוצאה לחישוב'); return; }
+
+  let preds = loadData('predictions',[]);
+  let users = loadData('users',[]);
+  let scored = 0;
+  ready.forEach(m => {
+    if (scoreGroupMatchRecord(m, preds, users)) scored++;
   });
-  showToast(`✅ ניקוד חושב עבור ${finished.length} משחקים`);
+  saveData('matches', matches);
+  saveData('predictions', preds);
+  saveData('users', users, {skipCloud:true});
+  const cloudSaved = await saveUsersToCloud(users, {replace:true});
+  const inputNote = inputState.updated ? ' כולל תוצאות שהוזנו במסך' : '';
+  const cloudNote = cloudSaved || !shouldUseCloudUsers() ? '' : '. הסנכרון המרכזי לא זמין כרגע';
+  showToast(`✅ ניקוד חושב עבור ${scored} משחקים${inputNote}${cloudNote}`, cloudSaved ? 2600 : 4800);
+  switchAdminPanel('results');
 };
 
 function resetMatchResult(match) {
@@ -2485,7 +2597,7 @@ function renderAdminUsers() {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick="refreshAdminUsersFromCloud()">רענן סטטוס</button>
         <button class="btn btn-secondary btn-sm" onclick="switchAdminPanel('upload-users')">ייבוא BULK</button>
-        <button class="btn btn-danger btn-sm" id="bulkDeleteUsersBtn" onclick="deleteSelectedUsers()">מחק נבחרים</button>
+        <button class="btn btn-danger btn-sm" id="bulkDeleteUsersBtn" type="button" data-admin-action="deleteSelectedUsers">מחק נבחרים</button>
         <button class="btn btn-primary btn-sm" onclick="showAddUser()">+ הוסף משתמש</button>
       </div>
     </div>
@@ -2503,11 +2615,11 @@ function renderAdminUsers() {
     </div>
     <div style="overflow-x:auto">
       <table class="admin-table">
-        <thead><tr><th><input type="checkbox" id="selectAllUsers" onchange="window.toggleAdminUsersSelection(this.checked)"></th><th>שם מלא</th><th>שם קבוצה</th><th>אימייל</th><th>טלפון</th><th>סיסמה</th><th>ניקוד</th><th>מקום</th><th>פעולות</th></tr></thead>
+        <thead><tr><th><input type="checkbox" id="selectAllUsers" data-admin-users-select-all></th><th>שם מלא</th><th>שם קבוצה</th><th>אימייל</th><th>טלפון</th><th>סיסמה</th><th>ניקוד</th><th>מקום</th><th>פעולות</th></tr></thead>
         <tbody>
           ${lb.map(u => `
             <tr>
-              <td><input type="checkbox" class="admin-user-select" value="${escapeHtml(u.id)}" onchange="window.updateBulkDeleteUsersButton()"></td>
+              <td><input type="checkbox" class="admin-user-select" value="${escapeHtml(u.id)}"></td>
               <td><strong>${u.fullName || u.displayName}</strong></td>
               <td style="color:var(--yellow-dark);font-weight:600">${u.teamName || '-'}</td>
               <td style="font-size:12px">${u.email || '-'}</td>
@@ -2517,8 +2629,8 @@ function renderAdminUsers() {
               <td>#${u.rank}</td>
               <td>
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  <button class="btn btn-secondary btn-sm" onclick="resetUserPassword('${u.id}')">אפס סיסמה</button>
-                  <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">מחק</button>
+                  <button class="btn btn-secondary btn-sm" type="button" data-admin-action="resetUserPassword" data-user-id="${escapeHtml(u.id)}">אפס סיסמה</button>
+                  <button class="btn btn-danger btn-sm" type="button" data-admin-action="deleteUser" data-user-id="${escapeHtml(u.id)}">מחק</button>
                 </div>
               </td>
             </tr>`).join('')}
