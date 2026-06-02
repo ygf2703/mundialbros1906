@@ -104,8 +104,12 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .result-miss{background:#FEE2E2;color:#991B1B}
 
 /* Login page */
-.login-page{min-height:100vh;background:linear-gradient(160deg,#040D1F 0%,#0D2451 50%,#071530 100%);display:flex;align-items:center;justify-content:center;padding:24px}
-.login-card{background:white;border-radius:20px;padding:32px 28px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5);border-top:4px solid var(--yellow)}
+.login-page{min-height:100vh;background:#040D1F;display:flex;align-items:center;justify-content:center;padding:24px 16px;position:relative;overflow:hidden;isolation:isolate}
+.login-page::before{content:"";position:absolute;inset:0;background:url("assets/login-fans-bg.png") center/cover no-repeat;opacity:.34;transform:scale(1.04);animation:loginBgOpacity 9s ease-in-out infinite;z-index:0}
+.login-page::after{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(4,13,31,.82) 0%,rgba(13,36,81,.5) 50%,rgba(7,21,48,.82) 100%);z-index:0}
+.login-card{background:white;border-radius:20px;padding:32px 28px;width:calc(100vw - 32px);max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5);border-top:4px solid var(--yellow);position:relative;z-index:1}
+@keyframes loginBgOpacity{0%,100%{opacity:.28}50%{opacity:.48}}
+@media (prefers-reduced-motion:reduce){.login-page::before{animation:none;opacity:.38}}
 .login-logo{text-align:center;margin-bottom:28px}
 .login-ball{font-size:52px;margin-bottom:8px}
 .login-title{font-family:'Rubik',sans-serif;font-size:24px;font-weight:900;color:var(--blue);line-height:1.2}
