@@ -20,8 +20,8 @@
 /* Logo SVG inline */
 .logo-img{width:44px;height:44px;display:block}
 body{font-family:'Heebo',sans-serif;background:#040D1F;color:var(--text);min-height:100vh;direction:rtl;position:relative;overflow-x:hidden}
-body::before{content:"";position:fixed;inset:0;background:url("assets/login-fans-bg.png") center/cover no-repeat;opacity:.1;animation:appBgOpacity 12s ease-in-out infinite;pointer-events:none;z-index:0}
-body::after{content:"";position:fixed;inset:0;background:linear-gradient(160deg,rgba(4,13,31,.9) 0%,rgba(13,36,81,.72) 48%,rgba(240,244,255,.88) 100%);pointer-events:none;z-index:0}
+body::before{content:"";position:fixed;inset:0;background:url("assets/login-fans-bg.png") center/cover no-repeat;opacity:.16;animation:appBgOpacity 12s ease-in-out infinite;pointer-events:none;z-index:0}
+body::after{content:"";position:fixed;inset:0;background:linear-gradient(160deg,rgba(4,13,31,.68) 0%,rgba(245,197,24,.26) 42%,rgba(255,251,230,.9) 100%);pointer-events:none;z-index:0}
 #app,.toast{position:relative;z-index:1}
 h1,h2,h3{font-family:'Rubik',sans-serif}
 button{cursor:pointer;font-family:'Heebo',sans-serif}
@@ -113,9 +113,9 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .login-page::after{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(4,13,31,.82) 0%,rgba(13,36,81,.5) 50%,rgba(7,21,48,.82) 100%);z-index:0}
 .login-card{background:white;border-radius:20px;padding:32px 28px;width:calc(100vw - 32px);max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5);border-top:4px solid var(--yellow);position:relative;z-index:1}
 @keyframes loginBgOpacity{0%,100%{opacity:.28}50%{opacity:.48}}
-@keyframes appBgOpacity{0%,100%{opacity:.08}50%{opacity:.18}}
+@keyframes appBgOpacity{0%,100%{opacity:.12}50%{opacity:.28}}
 @media (prefers-reduced-motion:reduce){.login-page::before{animation:none;opacity:.38}}
-@media (prefers-reduced-motion:reduce){body::before{animation:none;opacity:.12}}
+@media (prefers-reduced-motion:reduce){body::before{animation:none;opacity:.18}}
 .login-logo{text-align:center;margin-bottom:28px}
 .login-ball{font-size:52px;margin-bottom:8px}
 .login-title{font-family:'Rubik',sans-serif;font-size:24px;font-weight:900;color:var(--blue);line-height:1.2}
