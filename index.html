@@ -470,6 +470,7 @@ function saveData(key, val, options={}) {
   try {
     localStorage.setItem('mundial_'+key, JSON.stringify(val));
     if (key === 'users' && !options.skipCloud) queueUsersCloudSave(val);
+    if (APP_STATE_KEYS.includes(key) && !options.skipCloud) queueAppStateCloudSave(key);
     return true;
   } catch(e) {
     console.error(e);
@@ -702,6 +703,228 @@ async function syncUsersFromCloud() {
   saveData('users', merged, {skipCloud:true});
   if (merged.length !== cloudUsers.length) queueUsersCloudSave(merged);
   return true;
+}
+
+// ============================================================
+// CENTRAL APP STATE STORAGE (NETLIFY)
+// ============================================================
+const STATE_API_URL = '/.netlify/functions/state';
+const APP_STATE_KEYS = [
+  'predictions',
+  'knockoutPredictions',
+  'specialPredictions',
+  'matches',
+  'knockoutMatches',
+  'actualGroupWinners',
+  'actualTopScorer',
+  'actualChampion',
+  'specialsLocked'
+];
+const APP_STATE_DEFAULTS = {
+  predictions: [],
+  knockoutPredictions: [],
+  specialPredictions: {},
+  matches: [],
+  knockoutMatches: [],
+  actualGroupWinners: {},
+  actualTopScorer: '',
+  actualChampion: '',
+  specialsLocked: false
+};
+let appStateCloudSaveTimer = null;
+let appStateCloudSaveInProgress = false;
+let appStateCloudReady = false;
+let lastAppStateCloudSyncOk = false;
+const pendingAppStateCloudKeys = new Set();
+
+function shouldUseCloudState() {
+  return typeof fetch === 'function' && location.protocol !== 'file:';
+}
+
+function cloneStateDefault(key) {
+  const value = APP_STATE_DEFAULTS[key];
+  if (Array.isArray(value)) return [];
+  if (value && typeof value === 'object') return {};
+  return value;
+}
+
+function getLocalAppState(keys=APP_STATE_KEYS) {
+  return keys.reduce((state, key) => {
+    state[key] = loadData(key, cloneStateDefault(key));
+    return state;
+  }, {});
+}
+
+function latestRecordTime(record) {
+  return Math.max(
+    Number(record?.updatedAt || 0),
+    Number(record?.submittedAt || 0),
+    Number(record?.scoredAt || 0),
+    Number(record?.createdAt || 0)
+  );
+}
+
+function mergeRecordsByKey(existing, incoming, keyFn) {
+  const map = new Map();
+  [...(existing || []), ...(incoming || [])].forEach(item => {
+    const key = keyFn(item);
+    if (!key) return;
+    const previous = map.get(key);
+    if (!previous || latestRecordTime(item) >= latestRecordTime(previous)) {
+      map.set(key, {...previous, ...item});
+    }
+  });
+  return [...map.values()];
+}
+
+function matchHasResult(match) {
+  return match?.actualHomeScore !== null && match?.actualHomeScore !== undefined
+    || match?.actualAwayScore !== null && match?.actualAwayScore !== undefined
+    || !!match?.actualWinner
+    || !!match?.advancingTeam
+    || match?.status === 'finished'
+    || match?.status === 'scored';
+}
+
+function mergeMatchState(base, incoming) {
+  const merged = {...base, ...incoming};
+  if (matchHasResult(base) && !matchHasResult(incoming)) {
+    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','scoredAt','status'].forEach(key => {
+      merged[key] = base[key];
+    });
+  }
+  if (matchHasResult(base) && matchHasResult(incoming) && latestRecordTime(base) >= latestRecordTime(incoming)) {
+    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','scoredAt','status'].forEach(key => {
+      merged[key] = base[key];
+    });
+  }
+  return merged;
+}
+
+function mergeMatchLists(existing, incoming) {
+  const map = new Map();
+  [...(existing || []), ...(incoming || [])].forEach(match => {
+    if (!match?.id) return;
+    const previous = map.get(match.id);
+    map.set(match.id, previous ? mergeMatchState(previous, match) : {...match});
+  });
+  return [...map.values()];
+}
+
+function mergeSpecialPredictionState(existing={}, incoming={}) {
+  const merged = {...existing};
+  Object.entries(incoming || {}).forEach(([userId, pred]) => {
+    merged[userId] = {...(merged[userId] || {}), ...(pred || {})};
+  });
+  return merged;
+}
+
+function mergeAppStates(cloudState={}, localState={}) {
+  return {
+    predictions: mergeRecordsByKey(cloudState.predictions, localState.predictions, p => p?.userId && p?.matchId ? `${p.userId}:${p.matchId}` : p?.id),
+    knockoutPredictions: mergeRecordsByKey(cloudState.knockoutPredictions, localState.knockoutPredictions, p => p?.userId && p?.matchId ? `${p.userId}:${p.matchId}` : p?.id),
+    specialPredictions: mergeSpecialPredictionState(cloudState.specialPredictions, localState.specialPredictions),
+    matches: mergeMatchLists(cloudState.matches, localState.matches),
+    knockoutMatches: mergeMatchLists(cloudState.knockoutMatches, localState.knockoutMatches),
+    actualGroupWinners: {...(localState.actualGroupWinners || {}), ...(cloudState.actualGroupWinners || {})},
+    actualTopScorer: cloudState.actualTopScorer || localState.actualTopScorer || '',
+    actualChampion: cloudState.actualChampion || localState.actualChampion || '',
+    specialsLocked: !!(cloudState.specialsLocked || localState.specialsLocked)
+  };
+}
+
+function saveLocalAppState(state) {
+  APP_STATE_KEYS.forEach(key => saveData(key, state[key] ?? cloneStateDefault(key), {skipCloud:true}));
+}
+
+async function fetchAppStateFromCloud() {
+  if (!shouldUseCloudState()) return null;
+  try {
+    const res = await fetch(`${STATE_API_URL}?ts=${Date.now()}`, {cache:'no-store'});
+    if (!res.ok) {
+      lastAppStateCloudSyncOk = false;
+      return null;
+    }
+    const data = await res.json();
+    lastAppStateCloudSyncOk = true;
+    return data.state || null;
+  } catch(err) {
+    lastAppStateCloudSyncOk = false;
+    console.warn('Could not load app state from cloud', err);
+    return null;
+  }
+}
+
+async function saveAppStateToCloud(state=getLocalAppState(), options={}) {
+  if (!shouldUseCloudState()) return false;
+  let attempts = 0;
+  while (appStateCloudSaveInProgress && attempts < 20) {
+    await wait(100);
+    attempts++;
+  }
+  if (appStateCloudSaveInProgress) return false;
+  appStateCloudSaveInProgress = true;
+  try {
+    const res = await fetch(STATE_API_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({state, replace: !!options.replace})
+    });
+    lastAppStateCloudSyncOk = res.ok;
+    if (res.ok) {
+      const data = await res.json();
+      if (data.state) saveLocalAppState(data.state);
+    }
+    return res.ok;
+  } catch(err) {
+    lastAppStateCloudSyncOk = false;
+    console.warn('Could not save app state to cloud', err);
+    return false;
+  } finally {
+    appStateCloudSaveInProgress = false;
+  }
+}
+
+function queueAppStateCloudSave(key) {
+  if (!appStateCloudReady || !shouldUseCloudState()) return;
+  if (key) pendingAppStateCloudKeys.add(key);
+  clearTimeout(appStateCloudSaveTimer);
+  appStateCloudSaveTimer = setTimeout(() => {
+    const keys = pendingAppStateCloudKeys.size ? [...pendingAppStateCloudKeys] : APP_STATE_KEYS;
+    pendingAppStateCloudKeys.clear();
+    saveAppStateToCloud(getLocalAppState(keys));
+  }, 450);
+}
+
+function appStateLooksEmpty(state) {
+  return !state
+    || (!state.predictions?.length
+      && !state.knockoutPredictions?.length
+      && !Object.keys(state.specialPredictions || {}).length
+      && !state.matches?.length
+      && !state.knockoutMatches?.length
+      && !Object.keys(state.actualGroupWinners || {}).length
+      && !state.actualTopScorer
+      && !state.actualChampion);
+}
+
+async function syncAppStateFromCloud() {
+  const cloudState = await fetchAppStateFromCloud();
+  if (!cloudState) return false;
+  const localState = getLocalAppState();
+  const merged = mergeAppStates(cloudState, localState);
+  const cloudOnly = mergeAppStates(cloudState, {});
+  saveLocalAppState(merged);
+  if (JSON.stringify(merged) !== JSON.stringify(cloudOnly) && !appStateLooksEmpty(merged)) {
+    await saveAppStateToCloud(merged);
+  }
+  return true;
+}
+
+async function showStateSaveToast(successMessage, fallbackMessage='נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', keys=APP_STATE_KEYS) {
+  const cloudSaved = await saveAppStateToCloud(getLocalAppState(keys));
+  showToast(cloudSaved || !shouldUseCloudState() ? successMessage : fallbackMessage, cloudSaved ? 2200 : 4800);
+  return cloudSaved;
 }
 
 // ============================================================
@@ -1187,8 +1410,9 @@ function bindLoginPage() {
     adminLoginWrap.style.display = allowed ? 'block' : 'none';
   }
 
-  function completeLogin(user) {
+  async function completeLogin(user) {
     clearAllUnsavedPredictions();
+    await syncAppStateFromCloud();
     currentUser = user;
     isAdmin = false;
     currentPage = 'dashboard';
@@ -1275,7 +1499,7 @@ function bindLoginPage() {
       saveData('users', users, {skipCloud:true});
       const cloudSaved = await saveUsersToCloud(users);
       showToast(cloudSaved || !shouldUseCloudUsers() ? '✅ הסיסמה נשמרה' : '✅ הסיסמה נשמרה במכשיר הזה. עדכון המנהל יתבצע כשהסנכרון יחזור', cloudSaved ? 2200 : 4800);
-      completeLogin(users[idx]);
+      await completeLogin(users[idx]);
       return;
     }
 
@@ -1285,7 +1509,7 @@ function bindLoginPage() {
       return;
     }
     saveUsersToCloud(loadData('users', []));
-    completeLogin(selectedLoginUser);
+    await completeLogin(selectedLoginUser);
   };
 
   emailInput.onkeydown = e => {
@@ -1769,7 +1993,7 @@ function renderPredictions() {
 
 function bindPredictions() {}
 
-window.saveKOPrediction = function(matchId) {
+window.saveKOPrediction = async function(matchId) {
   const hEl = document.getElementById('kh_'+matchId);
   const aEl = document.getElementById('ka_'+matchId);
   const advEl = document.getElementById('kadv_'+matchId);
@@ -1801,14 +2025,14 @@ window.saveKOPrediction = function(matchId) {
   }
   saveData('knockoutPredictions', koPreds);
   clearUnsavedPrediction('ko:' + matchId);
-  showToast('✅ ניחוש נוקאאוט נשמר!');
+  await showStateSaveToast('✅ ניחוש נוקאאוט נשמר!', '✅ ניחוש נוקאאוט נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutPredictions']);
 };
 
 window.autoSaveKOPred = function(matchId) {
   markUnsavedPrediction('ko:' + matchId);
 };
 
-window.savePrediction = function(matchId) {
+window.savePrediction = async function(matchId) {
   const hEl = document.getElementById('h_'+matchId);
   const aEl = document.getElementById('a_'+matchId);
   if (!hEl || !aEl) return;
@@ -1843,7 +2067,7 @@ window.savePrediction = function(matchId) {
   }
   saveData('predictions', preds);
   clearUnsavedPrediction('match:' + matchId);
-  showToast('✅ ניחוש נשמר!');
+  await showStateSaveToast('✅ ניחוש נשמר!', '✅ ניחוש נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['predictions']);
   
   const el = hEl.closest('.match-card');
   if (el) {
@@ -1860,7 +2084,7 @@ window.autoSaveDashboardPred = function(matchId) {
   markUnsavedPrediction('match:' + matchId);
 };
 
-window.saveDashboardPrediction = function(matchId) {
+window.saveDashboardPrediction = async function(matchId) {
   const match = loadData('matches', []).find(m => m.id === matchId);
   if (!match || match.status !== 'open' || matchIsLocked(match)) {
     showToast('המשחק נעול לניחושים');
@@ -1893,7 +2117,7 @@ window.saveDashboardPrediction = function(matchId) {
   }
   saveData('predictions', preds);
   clearUnsavedPrediction('match:' + matchId);
-  showToast('הניחוש נשמר');
+  await showStateSaveToast('הניחוש נשמר', 'הניחוש נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['predictions']);
 };
 
 // ============================================================
@@ -2110,7 +2334,7 @@ window.toggleTopScorerOther = function() {
   if (select.value === '__other') otherInput.focus();
 };
 
-window.saveGroupWinner = function(grp) {
+window.saveGroupWinner = async function(grp) {
   const sel = document.getElementById('gw_'+grp);
   if (!sel || !sel.value) { showToast('נא לבחור קבוצה'); return; }
   let specials = loadData('specialPredictions', {});
@@ -2119,10 +2343,10 @@ window.saveGroupWinner = function(grp) {
   specials[currentUser.id][`group_${grp}_time`] = Date.now();
   saveData('specialPredictions', specials);
   clearUnsavedPrediction('special:group_' + grp);
-  showToast(`✅ נשמר: ${sel.value} מנצחת בית ${grp}`);
+  await showStateSaveToast(`✅ נשמר: ${sel.value} מנצחת בית ${grp}`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['specialPredictions']);
 };
 
-window.saveTopScorer = function() {
+window.saveTopScorer = async function() {
   if (topScorerIsLocked()) { showToast('🔒 ניחוש מלך השערים נעול (11.6 22:00)'); return; }
   const select = document.getElementById('topScorerSelect');
   const otherInput = document.getElementById('topScorerOtherInput');
@@ -2135,11 +2359,11 @@ window.saveTopScorer = function() {
   specials[currentUser.id].topScorerTime = Date.now();
   saveData('specialPredictions', specials);
   clearUnsavedPrediction('special:topScorer');
-  showToast(`✅ נשמר: ${val} כמלך השערים שלך`);
+  await showStateSaveToast(`✅ נשמר: ${val} כמלך השערים שלך`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['specialPredictions']);
 };
 
 // Save any stage-winner prediction (knockout rounds / tournament winner)
-window.saveStageWinner = function(elId, key) {
+window.saveStageWinner = async function(elId, key) {
   const sel = document.getElementById(elId);
   if (!sel || !sel.value) { showToast('נא לבחור קבוצה'); return; }
   let specials = loadData('specialPredictions', {});
@@ -2148,7 +2372,7 @@ window.saveStageWinner = function(elId, key) {
   specials[currentUser.id][key + '_time'] = Date.now();
   saveData('specialPredictions', specials);
   clearUnsavedPrediction('special:' + key);
-  showToast(`✅ נשמר: ${sel.value}`);
+  await showStateSaveToast(`✅ נשמר: ${sel.value}`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['specialPredictions']);
   // Re-render the special page so selection shows immediately
   const pg = document.getElementById('page-special');
   if (pg && unsavedPredictionKeys.size === 0) { pg.querySelector('.content').innerHTML = renderSpecialPredictions(); bindSpecialPredictions(); }
@@ -2426,7 +2650,7 @@ window.filterResults = function(type, btn) {
   btn.classList.add('active');
 };
 
-window.saveResult = function(matchId) {
+window.saveResult = async function(matchId) {
   const h = parseInt(document.getElementById('rh_'+matchId)?.value);
   const a = parseInt(document.getElementById('ra_'+matchId)?.value);
   if (isNaN(h)||isNaN(a)||h<0||a<0) { showToast('נא להזין תוצאה תקינה'); return; }
@@ -2438,8 +2662,9 @@ window.saveResult = function(matchId) {
   m.actualAwayScore = a;
   m.actualWinner = getOutcome(h,a);
   m.status = 'finished';
+  m.updatedAt = Date.now();
   saveData('matches', matches);
-  showToast(`✅ תוצאה נשמרה: ${h}:${a}`);
+  await showStateSaveToast(`✅ תוצאה נשמרה: ${h}:${a}`, `✅ תוצאה נשמרה במכשיר הזה: ${h}:${a}. הסנכרון המרכזי לא זמין כרגע`, ['matches']);
   switchAdminPanel('results');
 };
 
@@ -2472,6 +2697,7 @@ function scoreGroupMatchRecord(m, preds, users) {
   
   m.status = 'scored';
   m.scoredAt = Date.now();
+  m.updatedAt = m.scoredAt;
   return true;
 }
 
@@ -2494,6 +2720,7 @@ function readVisibleAdminResultsIntoMatches(matches) {
     m.actualHomeScore = h;
     m.actualAwayScore = a;
     m.actualWinner = getOutcome(h,a);
+    m.updatedAt = Date.now();
     if (m.status !== 'scored') m.status = 'finished';
     updated++;
   });
@@ -2512,8 +2739,10 @@ window.calcMatch = async function(matchId) {
   saveData('matches', matches);
   saveData('predictions', preds);
   saveData('users', users, {skipCloud:true});
-  await saveUsersToCloud(users, {replace:true});
+  const stateSaved = await saveAppStateToCloud(getLocalAppState(['matches','predictions']));
+  const usersSaved = await saveUsersToCloud(users, {replace:true});
   showToast('✅ ניקוד חושב לכל המשתמשים!');
+  if (shouldUseCloudState() && (!stateSaved || !usersSaved)) showToast('הניקוד חושב במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', 4800);
   switchAdminPanel('results');
 };
 
@@ -2538,9 +2767,11 @@ window.recalcMatch = async function(matchId) {
   });
   
   m.status = 'finished';
+  m.updatedAt = Date.now();
   saveData('matches', matches);
   saveData('predictions', preds);
   saveData('users', users, {skipCloud:true});
+  await saveAppStateToCloud(getLocalAppState(['matches','predictions']));
   await saveUsersToCloud(users, {replace:true});
   await window.calcMatch(matchId);
 };
@@ -2565,10 +2796,11 @@ window.calcAllMatches = async function() {
   saveData('matches', matches);
   saveData('predictions', preds);
   saveData('users', users, {skipCloud:true});
+  const stateSaved = await saveAppStateToCloud(getLocalAppState(['matches','predictions']));
   const cloudSaved = await saveUsersToCloud(users, {replace:true});
   const inputNote = inputState.updated ? ' כולל תוצאות שהוזנו במסך' : '';
-  const cloudNote = cloudSaved || !shouldUseCloudUsers() ? '' : '. הסנכרון המרכזי לא זמין כרגע';
-  showToast(`✅ ניקוד חושב עבור ${scored} משחקים${inputNote}${cloudNote}`, cloudSaved ? 2600 : 4800);
+  const cloudNote = (cloudSaved && stateSaved) || (!shouldUseCloudUsers() && !shouldUseCloudState()) ? '' : '. הסנכרון המרכזי לא זמין כרגע';
+  showToast(`✅ ניקוד חושב עבור ${scored} משחקים${inputNote}${cloudNote}`, cloudSaved && stateSaved ? 2600 : 4800);
   switchAdminPanel('results');
 };
 
@@ -2580,7 +2812,8 @@ function resetMatchResult(match) {
     actualAwayScore: null,
     actualWinner: null,
     advancingTeam: null,
-    scoredAt: null
+    scoredAt: null,
+    updatedAt: Date.now()
   };
 }
 
@@ -2622,8 +2855,9 @@ window.resetResultsAndScores = async function() {
   saveData('actualChampion', '');
   saveData('users', users, {skipCloud:true});
 
+  const stateSaved = await saveAppStateToCloud(getLocalAppState(), {replace:true});
   const cloudSaved = await saveUsersToCloud(users, {replace:true});
-  showToast(cloudSaved || !shouldUseCloudUsers() ? 'תוצאות וניקוד אופסו' : 'תוצאות וניקוד אופסו בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע', cloudSaved ? 2400 : 4800);
+  showToast((cloudSaved && stateSaved) || (!shouldUseCloudUsers() && !shouldUseCloudState()) ? 'תוצאות וניקוד אופסו' : 'תוצאות וניקוד אופסו בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע', cloudSaved && stateSaved ? 2400 : 4800);
   switchAdminPanel('results');
 };
 
@@ -2791,8 +3025,9 @@ async function deleteUsersByIds(userIds, confirmText) {
   if (!deleted) { showToast('לא נמצאו משתמשים למחיקה'); return; }
   removeUserScopedData(ids);
   saveData('users', users, {skipCloud:true});
+  const stateSaved = await saveAppStateToCloud(getLocalAppState(), {replace:true});
   const cloudSaved = await saveUsersToCloud(users, {replace:true});
-  showToast(cloudSaved || !shouldUseCloudUsers() ? `${deleted} משתמשים נמחקו` : `${deleted} משתמשים נמחקו בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע`, cloudSaved ? 2200 : 4800);
+  showToast((cloudSaved && stateSaved) || (!shouldUseCloudUsers() && !shouldUseCloudState()) ? `${deleted} משתמשים נמחקו` : `${deleted} משתמשים נמחקו בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע`, cloudSaved && stateSaved ? 2200 : 4800);
   switchAdminPanel('users');
 }
 
@@ -2880,17 +3115,17 @@ function renderAdminGroups() {
     </div>`;
 }
 
-window.setGroupWinner = function(grp) {
+window.setGroupWinner = async function(grp) {
   const sel = document.getElementById('aw_'+grp);
   if (!sel?.value) { showToast('נא לבחור מנצחת'); return; }
   let winners = loadData('actualGroupWinners', {});
   winners[grp] = sel.value;
   saveData('actualGroupWinners', winners);
-  showToast(`✅ ${sel.value} נשמרה כמנצחת בית ${grp}`);
+  await showStateSaveToast(`✅ ${sel.value} נשמרה כמנצחת בית ${grp}`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['actualGroupWinners']);
   switchAdminPanel('groups');
 };
 
-window.calcGroupBonuses = function() {
+window.calcGroupBonuses = async function() {
   const winners = loadData('actualGroupWinners', {});
   if (Object.keys(winners).length === 0) { showToast('לא הוגדרו מנצחות בתים'); return; }
   
@@ -2907,7 +3142,8 @@ window.calcGroupBonuses = function() {
     user.totalScore = (user.totalScore || 0) + bonus;
   });
   
-  saveData('users', users);
+  saveData('users', users, {skipCloud:true});
+  await saveUsersToCloud(users, {replace:true});
   showToast('✅ בונוסי מנצחות בתים חושבו!');
 };
 
@@ -2978,15 +3214,15 @@ function renderAdminTopScorer() {
     </div>`;
 }
 
-window.saveActualTopScorer = function() {
+window.saveActualTopScorer = async function() {
   const val = document.getElementById('actualTSInput')?.value?.trim();
   if (!val) return;
   saveData('actualTopScorer', val);
-  showToast('✅ מלך השערים נשמר');
+  await showStateSaveToast('✅ מלך השערים נשמר', 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['actualTopScorer']);
   switchAdminPanel('topscorer');
 };
 
-window.calcTopScorerBonus = function() {
+window.calcTopScorerBonus = async function() {
   const actual = loadData('actualTopScorer', '');
   if (!actual) { showToast('נא לשמור מלך שערים קודם'); return; }
   const specials = loadData('specialPredictions', {});
@@ -2998,18 +3234,19 @@ window.calcTopScorerBonus = function() {
       u.totalScore = (u.totalScore||0) + SCORING.topScorer;
     }
   });
-  saveData('users', users);
+  saveData('users', users, {skipCloud:true});
+  await saveUsersToCloud(users, {replace:true});
   showToast(`✅ בונוסי מלך שערים חושבו! +${SCORING.topScorer} לכל מי שניחש נכון`);
 };
 
-window.saveActualChampion = function() {
+window.saveActualChampion = async function() {
   const val = document.getElementById('actualChampInput')?.value?.trim();
   if (!val) return;
   saveData('actualChampion', val);
-  showToast('✅ אלופת העולם נשמרה: ' + val);
+  await showStateSaveToast('✅ אלופת העולם נשמרה: ' + val, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['actualChampion']);
 };
 
-window.calcChampionBonus = function() {
+window.calcChampionBonus = async function() {
   const actual = loadData('actualChampion', '');
   if (!actual) { showToast('נא לשמור אלופת העולם קודם'); return; }
   const specials = loadData('specialPredictions', {});
@@ -3023,12 +3260,13 @@ window.calcChampionBonus = function() {
       count++;
     }
   });
-  saveData('users', users);
+  saveData('users', users, {skipCloud:true});
+  await saveUsersToCloud(users, {replace:true});
   showToast(`✅ בונוס אלופת העולם חושב! ${count} משתמשים ניחשו נכון`);
 };
 
 // Calc bonus for knockout stage winner predictions (r16, qf, sf)
-window.calcKnockoutStageBonus = function(stage, keyPrefix, matchCount) {
+window.calcKnockoutStageBonus = async function(stage, keyPrefix, matchCount) {
   const koMatches = loadData('knockoutMatches', []).filter(m => m.stage === stage && m.advancingTeam);
   if (koMatches.length === 0) { showToast('אין תוצאות לשלב זה עדיין'); return; }
   const specials = loadData('specialPredictions', {});
@@ -3046,7 +3284,8 @@ window.calcKnockoutStageBonus = function(stage, keyPrefix, matchCount) {
       }
     });
   }
-  saveData('users', users);
+  saveData('users', users, {skipCloud:true});
+  await saveUsersToCloud(users, {replace:true});
   showToast(`✅ בונוסי ${stage} חושבו! ${total} ניחושים נכונים`);
 };
 
@@ -3137,7 +3376,7 @@ function renderAdminKnockout() {
     </div>`}`;
 }
 
-window.addKOMatch = function() {
+window.addKOMatch = async function() {
   const stage = document.getElementById('ko-stage')?.value;
   const date = document.getElementById('ko-date')?.value?.trim();
   const time = document.getElementById('ko-time')?.value?.trim();
@@ -3151,21 +3390,23 @@ window.addKOMatch = function() {
   const [h,m] = time.split(':');
   const startsAt = new Date(2026, parseInt(month)-1, parseInt(day), parseInt(h), parseInt(m)).getTime();
   
+  const now = Date.now();
   kms.push({id:'ko_'+uid(),stage,date,time,startsAt,homeTeam:home,awayTeam:away,hostCity:city||'',
-    status:'open',actualHomeScore:null,actualAwayScore:null,actualWinner:null,advancingTeam:null});
+    status:'open',actualHomeScore:null,actualAwayScore:null,actualWinner:null,advancingTeam:null,createdAt:now,updatedAt:now});
   saveData('knockoutMatches', kms);
-  showToast('✅ משחק נוקאאוט נוסף');
+  await showStateSaveToast('✅ משחק נוקאאוט נוסף', 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutMatches']);
   switchAdminPanel('knockout');
 };
 
-window.deleteKOMatch = function(id) {
+window.deleteKOMatch = async function(id) {
   if (!confirm('למחוק משחק?')) return;
   let kms = loadData('knockoutMatches',[]);
   saveData('knockoutMatches', kms.filter(m => m.id !== id));
-  showToast('נמחק'); switchAdminPanel('knockout');
+  await showStateSaveToast('נמחק', 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutMatches']);
+  switchAdminPanel('knockout');
 };
 
-window.saveKOResult = function(id) {
+window.saveKOResult = async function(id) {
   const h = parseInt(document.getElementById('krh_'+id)?.value);
   const a = parseInt(document.getElementById('kra_'+id)?.value);
   const adv = document.getElementById('kradv_'+id)?.value;
@@ -3174,12 +3415,12 @@ window.saveKOResult = function(id) {
   const m = kms.find(x => x.id===id);
   if (!m) return;
   m.actualHomeScore=h; m.actualAwayScore=a; m.actualWinner=getOutcome(h,a);
-  m.advancingTeam=adv||null; m.status='finished';
+  m.advancingTeam=adv||null; m.status='finished'; m.updatedAt=Date.now();
   saveData('knockoutMatches',kms);
-  showToast('✅ תוצאה נשמרה');
+  await showStateSaveToast('✅ תוצאה נשמרה', 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutMatches']);
 };
 
-window.calcKOMatch = function(id) {
+window.calcKOMatch = async function(id) {
   const kms = loadData('knockoutMatches',[]);
   const m = kms.find(x => x.id===id);
   if (!m||m.actualHomeScore===null) { showToast('נא לשמור תוצאה קודם'); return; }
@@ -3206,7 +3447,13 @@ window.calcKOMatch = function(id) {
   
   const kmIdx = kms.findIndex(x=>x.id===id);
   kms[kmIdx].status='scored';
-  saveData('knockoutMatches',kms); saveData('knockoutPredictions',preds); saveData('users',users);
+  kms[kmIdx].scoredAt=Date.now();
+  kms[kmIdx].updatedAt=kms[kmIdx].scoredAt;
+  saveData('knockoutMatches',kms);
+  saveData('knockoutPredictions',preds);
+  saveData('users',users,{skipCloud:true});
+  await saveAppStateToCloud(getLocalAppState(['knockoutMatches','knockoutPredictions']));
+  await saveUsersToCloud(users,{replace:true});
   showToast('✅ ניקוד חושב');
   switchAdminPanel('knockout');
 };
@@ -3620,6 +3867,8 @@ async function bootstrapApp() {
   initUsers();
   initAdmin();
   await syncUsersFromCloud();
+  await syncAppStateFromCloud();
+  appStateCloudReady = true;
   render();
 }
 bootstrapApp();
