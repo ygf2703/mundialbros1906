@@ -34,12 +34,34 @@ function objectOrEmpty(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function normalizeSpecialPredictionKeys(pred={}) {
+  const normalized = {...objectOrEmpty(pred)};
+  const aliases = {
+    pred_tournament_winner: 'tournament_winner',
+    pred_tournament_winner_time: 'tournament_winner_time',
+    pred_sf1_winner: 'sf1_winner',
+    pred_sf1_winner_time: 'sf1_winner_time',
+    pred_sf2_winner: 'sf2_winner',
+    pred_sf2_winner_time: 'sf2_winner_time'
+  };
+  Object.entries(aliases).forEach(([from, to]) => {
+    if (normalized[from] && !normalized[to]) normalized[to] = normalized[from];
+  });
+  return normalized;
+}
+
+function normalizeSpecials(specials={}) {
+  return Object.fromEntries(
+    Object.entries(objectOrEmpty(specials)).map(([userId, pred]) => [userId, normalizeSpecialPredictionKeys(pred)])
+  );
+}
+
 function sanitizeState(input) {
   const source = objectOrEmpty(input);
   return {
     predictions: Array.isArray(source.predictions) ? source.predictions.filter(Boolean) : [],
     knockoutPredictions: Array.isArray(source.knockoutPredictions) ? source.knockoutPredictions.filter(Boolean) : [],
-    specialPredictions: objectOrEmpty(source.specialPredictions),
+    specialPredictions: normalizeSpecials(source.specialPredictions),
     matches: Array.isArray(source.matches) ? source.matches.filter(m => m && m.id) : [],
     knockoutMatches: Array.isArray(source.knockoutMatches) ? source.knockoutMatches.filter(m => m && m.id) : [],
     actualGroupWinners: objectOrEmpty(source.actualGroupWinners),
@@ -108,9 +130,12 @@ function mergeMatches(existing, incoming) {
 function mergeSpecials(existing, incoming) {
   const merged = {...existing};
   Object.entries(incoming || {}).forEach(([userId, pred]) => {
-    merged[userId] = {...objectOrEmpty(merged[userId]), ...objectOrEmpty(pred)};
+    merged[userId] = normalizeSpecialPredictionKeys({
+      ...normalizeSpecialPredictionKeys(merged[userId]),
+      ...normalizeSpecialPredictionKeys(pred)
+    });
   });
-  return merged;
+  return normalizeSpecials(merged);
 }
 
 function mergeState(existingState, incomingState, replace=false) {

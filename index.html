@@ -811,12 +811,50 @@ function mergeMatchLists(existing, incoming) {
   return [...map.values()];
 }
 
+function normalizeSpecialPredictionKeys(pred={}) {
+  const normalized = {...(pred || {})};
+  const aliases = {
+    pred_tournament_winner: 'tournament_winner',
+    pred_tournament_winner_time: 'tournament_winner_time',
+    pred_sf1_winner: 'sf1_winner',
+    pred_sf1_winner_time: 'sf1_winner_time',
+    pred_sf2_winner: 'sf2_winner',
+    pred_sf2_winner_time: 'sf2_winner_time'
+  };
+  Object.entries(aliases).forEach(([from, to]) => {
+    if (normalized[from] && !normalized[to]) normalized[to] = normalized[from];
+  });
+  return normalized;
+}
+
+function normalizeSpecialPredictionsMap(specials={}) {
+  let changed = false;
+  const normalized = {};
+  Object.entries(specials || {}).forEach(([userId, pred]) => {
+    normalized[userId] = normalizeSpecialPredictionKeys(pred);
+    Object.keys(normalized[userId]).forEach(key => {
+      if (normalized[userId][key] !== pred?.[key]) changed = true;
+    });
+  });
+  return {specials: normalized, changed};
+}
+
+function getSpecialPredictions() {
+  const source = loadData('specialPredictions', {});
+  const normalized = normalizeSpecialPredictionsMap(source);
+  if (normalized.changed) saveData('specialPredictions', normalized.specials);
+  return normalized.specials;
+}
+
 function mergeSpecialPredictionState(existing={}, incoming={}) {
   const merged = {...existing};
   Object.entries(incoming || {}).forEach(([userId, pred]) => {
-    merged[userId] = {...(merged[userId] || {}), ...(pred || {})};
+    merged[userId] = normalizeSpecialPredictionKeys({
+      ...normalizeSpecialPredictionKeys(merged[userId] || {}),
+      ...normalizeSpecialPredictionKeys(pred || {})
+    });
   });
-  return merged;
+  return normalizeSpecialPredictionsMap(merged).specials;
 }
 
 function mergeAppStates(cloudState={}, localState={}) {
@@ -2124,7 +2162,7 @@ window.saveDashboardPrediction = async function(matchId) {
 // SPECIAL PREDICTIONS
 // ============================================================
 function renderSpecialPredictions() {
-  const specials = loadData('specialPredictions', {});
+  const specials = getSpecialPredictions();
   const mySpecial = specials[currentUser.id] || {};
   const groups = loadData('groups', GROUPS_DEF);
   const groupsLocked = loadData('specialsLocked', false);
@@ -2145,6 +2183,7 @@ function renderSpecialPredictions() {
   const sortTeamsAlpha = teams => [...teams].sort((a,b) => a.localeCompare(b, 'he'));
 
   function stageCard(id, title, emoji, points, lockLabel, isLocked, selected, teamList, placeholder) {
+    const storageKey = id.startsWith('pred_') ? id.slice(5) : id;
     const opts = teamList.length > 0
       ? teamList.map(t => `<option value="${escapeHtml(t)}" ${selected===t?'selected':''}>${teamText(t)}</option>`).join('')
       : allTeams.map(t => `<option value="${escapeHtml(t)}" ${selected===t?'selected':''}>${teamText(t)}</option>`).join('');
@@ -2162,11 +2201,11 @@ function renderSpecialPredictions() {
             <div style="font-size:14px;font-weight:600;color:var(--blue)">${selected ? teamText(selected) : 'לא נבחר'}</div>
             <div class="status-badge status-locked" style="margin-top:8px;display:inline-flex">🔒 נעול</div>
           ` : `
-            <select class="form-input" id="${id}" onchange="markUnsavedPrediction('special:${id}')" style="margin-bottom:8px">
+            <select class="form-input" id="${id}" onchange="markUnsavedPrediction('special:${storageKey}')" style="margin-bottom:8px">
               <option value="">${placeholder}</option>
               ${opts}
             </select>
-            <button class="btn btn-primary btn-sm btn-full" onclick="saveStageWinner('${id}','${id}')">שמור</button>
+            <button class="btn btn-primary btn-sm btn-full" onclick="saveStageWinner('${id}','${storageKey}')">שמור</button>
           `}
         </div>
       </div>`;
@@ -2337,7 +2376,7 @@ window.toggleTopScorerOther = function() {
 window.saveGroupWinner = async function(grp) {
   const sel = document.getElementById('gw_'+grp);
   if (!sel || !sel.value) { showToast('נא לבחור קבוצה'); return; }
-  let specials = loadData('specialPredictions', {});
+  let specials = getSpecialPredictions();
   if (!specials[currentUser.id]) specials[currentUser.id] = {};
   specials[currentUser.id][`group_${grp}`] = sel.value;
   specials[currentUser.id][`group_${grp}_time`] = Date.now();
@@ -2353,7 +2392,7 @@ window.saveTopScorer = async function() {
   if (!select || !select.value) { showToast('נא לבחור שחקן'); return; }
   const val = select.value === '__other' ? otherInput?.value?.trim() : select.value;
   if (!val) { showToast('נא להזין שם שחקן'); return; }
-  let specials = loadData('specialPredictions', {});
+  let specials = getSpecialPredictions();
   if (!specials[currentUser.id]) specials[currentUser.id] = {};
   specials[currentUser.id].topScorer = val;
   specials[currentUser.id].topScorerTime = Date.now();
@@ -2366,7 +2405,7 @@ window.saveTopScorer = async function() {
 window.saveStageWinner = async function(elId, key) {
   const sel = document.getElementById(elId);
   if (!sel || !sel.value) { showToast('נא לבחור קבוצה'); return; }
-  let specials = loadData('specialPredictions', {});
+  let specials = getSpecialPredictions();
   if (!specials[currentUser.id]) specials[currentUser.id] = {};
   specials[currentUser.id][key] = sel.value;
   specials[currentUser.id][key + '_time'] = Date.now();
@@ -3004,7 +3043,7 @@ function removeUserScopedData(userIds) {
   const ids = new Set(userIds);
   saveData('predictions', loadData('predictions', []).filter(p => !ids.has(p.userId)));
   saveData('knockoutPredictions', loadData('knockoutPredictions', []).filter(p => !ids.has(p.userId)));
-  const specials = loadData('specialPredictions', {});
+  const specials = getSpecialPredictions();
   userIds.forEach(id => delete specials[id]);
   saveData('specialPredictions', specials);
 }
@@ -3129,7 +3168,7 @@ window.calcGroupBonuses = async function() {
   const winners = loadData('actualGroupWinners', {});
   if (Object.keys(winners).length === 0) { showToast('לא הוגדרו מנצחות בתים'); return; }
   
-  const specials = loadData('specialPredictions', {});
+  const specials = getSpecialPredictions();
   let users = loadData('users', []);
   
   users.forEach(user => {
@@ -3152,7 +3191,7 @@ window.calcGroupBonuses = async function() {
 // ============================================================
 function renderAdminTopScorer() {
   const actual = loadData('actualTopScorer', '');
-  const specials = loadData('specialPredictions', {});
+  const specials = getSpecialPredictions();
   const users = loadData('users', []);
   
   const predictions = users.map(u => ({
@@ -3225,7 +3264,7 @@ window.saveActualTopScorer = async function() {
 window.calcTopScorerBonus = async function() {
   const actual = loadData('actualTopScorer', '');
   if (!actual) { showToast('נא לשמור מלך שערים קודם'); return; }
-  const specials = loadData('specialPredictions', {});
+  const specials = getSpecialPredictions();
   let users = loadData('users', []);
   users.forEach(u => {
     const pred = specials[u.id]?.topScorer;
@@ -3249,7 +3288,7 @@ window.saveActualChampion = async function() {
 window.calcChampionBonus = async function() {
   const actual = loadData('actualChampion', '');
   if (!actual) { showToast('נא לשמור אלופת העולם קודם'); return; }
-  const specials = loadData('specialPredictions', {});
+  const specials = getSpecialPredictions();
   let users = loadData('users', []);
   let count = 0;
   users.forEach(u => {
@@ -3269,7 +3308,7 @@ window.calcChampionBonus = async function() {
 window.calcKnockoutStageBonus = async function(stage, keyPrefix, matchCount) {
   const koMatches = loadData('knockoutMatches', []).filter(m => m.stage === stage && m.advancingTeam);
   if (koMatches.length === 0) { showToast('אין תוצאות לשלב זה עדיין'); return; }
-  const specials = loadData('specialPredictions', {});
+  const specials = getSpecialPredictions();
   let users = loadData('users', []);
   let total = 0;
   for (let i = 0; i < koMatches.length; i++) {
