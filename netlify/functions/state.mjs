@@ -16,6 +16,7 @@ const defaults = {
   actualGroupWinners: {},
   actualTopScorer: '',
   actualChampion: '',
+  dailyBonusActuals: {},
   specialsLocked: false
 };
 
@@ -47,6 +48,9 @@ function normalizeSpecialPredictionKeys(pred={}) {
   Object.entries(aliases).forEach(([from, to]) => {
     if (normalized[from] && !normalized[to]) normalized[to] = normalized[from];
   });
+  ['dailyBonus','dailyBonusTimes','dailyBonusScores'].forEach(key => {
+    if (normalized[key] && (typeof normalized[key] !== 'object' || Array.isArray(normalized[key]))) delete normalized[key];
+  });
   return normalized;
 }
 
@@ -67,8 +71,31 @@ function sanitizeState(input) {
     actualGroupWinners: objectOrEmpty(source.actualGroupWinners),
     actualTopScorer: cleanText(source.actualTopScorer),
     actualChampion: cleanText(source.actualChampion),
+    dailyBonusActuals: sanitizeDailyBonusActuals(source.dailyBonusActuals),
     specialsLocked: !!source.specialsLocked
   };
+}
+
+function sanitizeDailyBonusActuals(actuals={}) {
+  return Object.fromEntries(
+    Object.entries(objectOrEmpty(actuals))
+      .map(([id, actual]) => {
+        if (actual && typeof actual === 'object' && !Array.isArray(actual)) {
+          const source = objectOrEmpty(actual);
+          const value = cleanText(source.value);
+          if (!value) return null;
+          return [id, {
+            ...source,
+            value,
+            updatedAt: Number(source.updatedAt || 0),
+            scoredAt: Number(source.scoredAt || 0)
+          }];
+        }
+        const value = cleanText(actual);
+        return value ? [id, {value, updatedAt: 0, scoredAt: 0}] : null;
+      })
+      .filter(Boolean)
+  );
 }
 
 function latestTime(record) {
@@ -130,12 +157,30 @@ function mergeMatches(existing, incoming) {
 function mergeSpecials(existing, incoming) {
   const merged = {...existing};
   Object.entries(incoming || {}).forEach(([userId, pred]) => {
-    merged[userId] = normalizeSpecialPredictionKeys({
-      ...normalizeSpecialPredictionKeys(merged[userId]),
-      ...normalizeSpecialPredictionKeys(pred)
-    });
+    merged[userId] = mergeSpecialRecord(merged[userId], pred);
   });
   return normalizeSpecials(merged);
+}
+
+function mergeSpecialRecord(existing={}, incoming={}) {
+  const base = normalizeSpecialPredictionKeys(existing);
+  const next = normalizeSpecialPredictionKeys(incoming);
+  const merged = {...base, ...next};
+  ['dailyBonus','dailyBonusTimes','dailyBonusScores'].forEach(key => {
+    const value = {...objectOrEmpty(base[key]), ...objectOrEmpty(next[key])};
+    if (Object.keys(value).length) merged[key] = value;
+    else delete merged[key];
+  });
+  return normalizeSpecialPredictionKeys(merged);
+}
+
+function mergeDailyBonusActuals(existing={}, incoming={}) {
+  const merged = {...sanitizeDailyBonusActuals(existing)};
+  Object.entries(sanitizeDailyBonusActuals(incoming)).forEach(([id, actual]) => {
+    const previous = merged[id];
+    if (!previous || latestTime(actual) >= latestTime(previous)) merged[id] = actual;
+  });
+  return merged;
 }
 
 function mergeState(existingState, incomingState, replace=false) {
@@ -151,6 +196,7 @@ function mergeState(existingState, incomingState, replace=false) {
     actualGroupWinners: {...existing.actualGroupWinners, ...incoming.actualGroupWinners},
     actualTopScorer: incoming.actualTopScorer || existing.actualTopScorer,
     actualChampion: incoming.actualChampion || existing.actualChampion,
+    dailyBonusActuals: mergeDailyBonusActuals(existing.dailyBonusActuals, incoming.dailyBonusActuals),
     specialsLocked: existing.specialsLocked || incoming.specialsLocked
   };
 }
