@@ -163,7 +163,7 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .dashboard-kpi{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);padding:12px;text-align:center;backdrop-filter:blur(6px)}
 .dashboard-kpi strong{display:block;font-family:'Rubik',sans-serif;font-size:28px;font-weight:900;line-height:1;color:white}
 .dashboard-kpi span{display:block;font-size:11px;color:rgba(255,255,255,.74);font-weight:700;margin-top:5px}
-.dashboard-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.dashboard-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .dashboard-action{min-height:68px;border:1px solid rgba(197,213,240,.9);border-radius:var(--radius-sm);background:rgba(255,255,255,.92);color:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:800;box-shadow:var(--shadow);backdrop-filter:blur(8px)}
 .dashboard-action strong{font-family:'Rubik',sans-serif;font-size:18px;line-height:1}
 .dashboard-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:16px;align-items:start}
@@ -286,6 +286,17 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .special-card-body{padding:16px}
 .daily-bonus-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
 .daily-bonus-card{height:100%;margin-bottom:0}
+.rules-hero{background:linear-gradient(135deg,rgba(13,36,81,.98),rgba(26,74,138,.92));color:white;border:1px solid rgba(255,255,255,.22);border-bottom:3px solid var(--yellow);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
+.rules-hero h2{font-size:24px;font-weight:900;margin-bottom:6px}
+.rules-hero p{font-size:13px;color:rgba(255,255,255,.78);font-weight:600;line-height:1.5}
+.rules-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.rules-card{background:rgba(255,255,255,.94);border:1px solid rgba(197,213,240,.86);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;backdrop-filter:blur(8px)}
+.rules-card-head{background:var(--blue);color:var(--yellow);font-weight:800;padding:12px 14px;border-bottom:2px solid var(--yellow)}
+.rules-card-body{padding:14px 16px}
+.rules-list{display:flex;flex-direction:column;gap:9px;color:var(--text2);font-size:13px;line-height:1.45}
+.rules-list li{margin-right:18px}
+.rules-note{background:var(--yellow-pale);border:1px solid var(--yellow);border-radius:var(--radius-sm);padding:12px 14px;color:var(--blue);font-size:13px;font-weight:700;line-height:1.45}
+@media(max-width:760px){.rules-grid{grid-template-columns:1fr}.bottom-nav .nav-item{font-size:9px;padding-inline:2px}}
 
 /* Responsive */
 @media(min-width:640px){
@@ -1783,7 +1794,8 @@ function renderUserShell() {
     dashboard: renderDashboard(),
     predictions: renderPredictions(),
     special: renderSpecialPredictions(),
-    leaderboard: renderLeaderboard()
+    leaderboard: renderLeaderboard(),
+    rules: renderRulesPage()
   };
 
   return `
@@ -1820,6 +1832,9 @@ function renderUserShell() {
       <div class="page${currentPage==='leaderboard'?' active':''}" id="page-leaderboard">
         <div class="content">${pages.leaderboard}</div>
       </div>
+      <div class="page${currentPage==='rules'?' active':''}" id="page-rules">
+        <div class="content dashboard-content">${pages.rules}</div>
+      </div>
     </div>
 
     <nav class="bottom-nav">
@@ -1841,6 +1856,10 @@ function renderUserShell() {
       <button class="nav-item${currentPage==='leaderboard'?' active':''}" onclick="navTo('leaderboard')">
         <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 21H5a2 2 0 01-2-2v-5m4-3H3m18-4v12a2 2 0 01-2 2h-3m0-11h5m-8-6v14"/></svg>
         דירוג
+      </button>
+      <button class="nav-item${currentPage==='rules'?' active':''}" onclick="navTo('rules')">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 4h10a4 4 0 014 4v12H9a4 4 0 00-4-4z"/><path d="M5 4v12m4-8h6m-6 4h6"/></svg>
+        תקנון
       </button>
     </nav>
   </div>`;
@@ -1974,6 +1993,7 @@ function renderDashboard() {
       <button class="dashboard-action" onclick="navTo('predictions')"><strong>${missing}</strong><span>ניחושים חסרים</span></button>
       <button class="dashboard-action" onclick="navTo('special')"><strong>★</strong><span>בונוסים</span></button>
       <button class="dashboard-action" onclick="navTo('leaderboard')"><strong>${rank}</strong><span>המקום שלך</span></button>
+      <button class="dashboard-action" onclick="navTo('rules')"><strong>?</strong><span>איך משחקים</span></button>
     </div>`;
 
   const upcomingMatchesHtml = `
@@ -2045,6 +2065,116 @@ function startCountdown(startsAt) {
     if (el('cd-mins')) el('cd-mins').textContent = String(mins).padStart(2,'0');
     if (el('cd-secs')) el('cd-secs').textContent = String(secs).padStart(2,'0');
   }, 1000);
+}
+
+function renderRulesPage() {
+  const scoringRows = [
+    ['תוצאה מדויקת בשלב הבתים', `${SCORING.exactMatch} נקודות`],
+    ['כיוון נכון בשלב הבתים', `${SCORING.correctOutcome} נקודות`],
+    ['תוצאה מדויקת בנוקאאוט', `${SCORING.knockoutExact} נקודות`],
+    ['כיוון נכון בנוקאאוט', `${SCORING.knockoutOutcome} נקודות`],
+    ['קבוצה שעולה שלב בנוקאאוט', `${SCORING.knockoutAdvancing} נקודות`],
+    ['מנצחת בית', `${SCORING.groupWinner} נקודות לכל בית`],
+    ['מנצחת שלב נוקאאוט מיוחד', `${SCORING.knockoutStageWinner} נקודות`],
+    ['מלך השערים', `${SCORING.topScorer} נקודות`],
+    ['אלופת העולם', `${SCORING.tournamentWinner} נקודות`],
+    ['שאלת בונוס יומית כן/לא', `${SCORING.dailyBonus} נקודות`],
+    ['שאלת בונוס יומית בחירה מדויקת', `${SCORING.dailyBonusExact} נקודות`]
+  ];
+
+  const scoringTable = `
+    <div style="overflow-x:auto">
+      <table class="leaderboard-table" style="min-width:420px;width:100%">
+        <thead><tr><th>סוג ניחוש</th><th>ניקוד</th></tr></thead>
+        <tbody>
+          ${scoringRows.map(([label, points]) => `<tr><td>${label}</td><td><strong>${points}</strong></td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  return `
+    <div class="rules-hero">
+      <h2>תקנון ואיך משחקים</h2>
+      <p>כל מה שצריך לדעת כדי להשתתף במשחק הניחושים של אחים מנחשים מונדיאל 2026: הרשמה, שמירת הימורים, סגירת ניחושים, ניקוד וכללי השתתפות.</p>
+    </div>
+
+    <div class="rules-note" style="margin-bottom:16px">
+      ההשתתפות במשחק מותרת רק למתנדבי אחים לסמל שנרשמו ואושרו במערכת. נושא הפרסים יפורסם ויתווסף בהמשך.
+    </div>
+
+    <div class="rules-grid">
+      <section class="rules-card">
+        <div class="rules-card-head">איך משחקים</div>
+        <div class="rules-card-body">
+          <ol class="rules-list">
+            <li>נכנסים עם האימייל או הטלפון שאיתם נרשמתם. בהתחברות הראשונה בוחרים סיסמה אישית שתשמש אתכם לכל המשך המשחק.</li>
+            <li>בלשונית ניחושים ממלאים תוצאות למשחקים הפתוחים. חובה ללחוץ שמירה כדי שהניחוש ייחשב.</li>
+            <li>בדשבורד אפשר לראות משחקים קרובים, תוצאות אחרונות, דירוג משתתפים וקיצורי דרך למסכים החשובים.</li>
+            <li>בלשונית בונוסים ממלאים הימורים מיוחדים: מלך שערים, אלופת העולם, מנצחות בתים, נוקאאוט ושאלות בונוס יומיות.</li>
+            <li>אפשר לשנות ניחוש כל עוד הוא פתוח ולא ננעל. אחרי נעילה, הבחירה האחרונה שנשמרה היא הבחירה הקובעת.</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="rules-card">
+        <div class="rules-card-head">סגירת הימורים ושמירה</div>
+        <div class="rules-card-body">
+          <ul class="rules-list">
+            <li>ניחוש תוצאה למשחק נסגר ${SCORING.lockMinutes} דקות לפני שריקת הפתיחה של אותו משחק.</li>
+            <li>שאלות בונוס יומיות נסגרות ${SCORING.lockMinutes} דקות לפני המשחק הראשון של אותו ערב משחקים.</li>
+            <li>מלך השערים נסגר בתאריך 11.6 בשעה 22:00.</li>
+            <li>הימורי נוקאאוט ובונוסים לפי שלב נסגרים לפני המשחק או השלב הרלוונטי כפי שמופיע במסך.</li>
+            <li>אם בוצעו הימורים שלא נשמרו, המערכת תתריע: “בוצעו הימורים שלא נשמרו, שמור לפני יציאה”. ניחוש שלא נשמר לא ייחשב.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="rules-card">
+        <div class="rules-card-head">ניקוד</div>
+        <div class="rules-card-body">
+          ${scoringTable}
+          <div style="font-size:12px;color:var(--text3);margin-top:10px;line-height:1.45">
+            טעות בניחוש אינה מקנה נקודות. בשאלות בונוס יומיות, רק תשובה שתואמת בדיוק לתשובת האמת שהוזנה על ידי המנהל מקבלת ניקוד.
+          </div>
+        </div>
+      </section>
+
+      <section class="rules-card">
+        <div class="rules-card-head">דירוג ושוברי שוויון</div>
+        <div class="rules-card-body">
+          <ul class="rules-list">
+            <li>הדירוג נקבע לפי סך הנקודות הכולל של המשתתף.</li>
+            <li>במקרה של שוויון, הדירוג נקבע לפי מספר התוצאות המדויקות.</li>
+            <li>אם עדיין יש שוויון, המערכת משווה את מספר הניחושים עם כיוון נכון.</li>
+            <li>אם עדיין נשאר שוויון, הסדר יוצג לפי שם המשתתף במערכת.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="rules-card">
+        <div class="rules-card-head">כללי השתתפות</div>
+        <div class="rules-card-body">
+          <ul class="rules-list">
+            <li>המשחק מיועד למתנדבי אחים לסמל בלבד. משתמש שאינו זכאי להשתתף יכול להימחק או להיחסם על ידי מנהל המשחק.</li>
+            <li>כל משתתף אחראי לשמור את הניחושים שלו בזמן ולוודא שהופיעה הודעת שמירה.</li>
+            <li>אין להעביר סיסמה, משתמש או גישה לאדם אחר.</li>
+            <li>במקרה של תקלה טכנית, יש לפנות למנהל המשחק בהקדם עם צילום מסך ותיאור הבעיה.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="rules-card">
+        <div class="rules-card-head">ניהול, תיקונים ופרסים</div>
+        <div class="rules-card-body">
+          <ul class="rules-list">
+            <li>התוצאות הרשמיות וניקוד הבונוסים נקבעים לפי הנתונים שמוזנים על ידי מנהל המשחק במערכת.</li>
+            <li>המנהל רשאי לתקן תוצאה, תשובת אמת או חישוב ניקוד אם התגלתה טעות, והמערכת תחשב מחדש בהתאם.</li>
+            <li>במקרה של פער בין תצוגת המשתמש לבין נתוני הניהול, נתוני הניהול והשמירה המרכזית הם הקובעים.</li>
+            <li>פרטי הפרסים יתווספו בהמשך לאחר שיוגדרו סופית.</li>
+          </ul>
+        </div>
+      </section>
+    </div>`;
 }
 
 // ============================================================
@@ -2768,12 +2898,13 @@ window.navTo = function(page) {
       if (page === 'predictions') return renderPredictions();
       if (page === 'special') return renderSpecialPredictions();
       if (page === 'leaderboard') return renderLeaderboard();
+      if (page === 'rules') return renderRulesPage();
       return '';
     })();
     if (page === 'dashboard') startCountdown;
   }
   const navBtns = document.querySelectorAll('.nav-item');
-  const pageIndex = ['dashboard','predictions','special','leaderboard'].indexOf(page);
+  const pageIndex = ['dashboard','predictions','special','leaderboard','rules'].indexOf(page);
   if (navBtns[pageIndex]) navBtns[pageIndex].classList.add('active');
   window.scrollTo(0,0);
 };
