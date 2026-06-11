@@ -1466,8 +1466,44 @@ let isAdmin = false;
 let currentPage = 'login';
 let adminPanel = 'results';
 let pendingUserImport = [];
+const USER_PAGES = ['dashboard','predictions','special','leaderboard','rules'];
 const UNSAVED_PREDICTIONS_MESSAGE = 'בוצעו הימורים שלא נשמרו, שמור לפני יציאה';
 const unsavedPredictionKeys = new Set();
+
+function saveCurrentSession(page=currentPage) {
+  if (!currentUser?.id || isAdmin) return;
+  saveData('session', {
+    userId: currentUser.id,
+    page: USER_PAGES.includes(page) ? page : 'dashboard',
+    updatedAt: Date.now()
+  }, {skipCloud:true});
+}
+
+function clearCurrentSession() {
+  try { localStorage.removeItem('mundial_session'); } catch {}
+}
+
+function refreshCurrentUserFromStore() {
+  if (!currentUser?.id) return false;
+  const updatedUser = loadData('users', []).find(u => u.id === currentUser.id);
+  if (!updatedUser) return false;
+  currentUser = updatedUser;
+  return true;
+}
+
+function restoreCurrentSession() {
+  const session = loadData('session', null);
+  if (!session?.userId) return false;
+  const user = loadData('users', []).find(u => u.id === session.userId);
+  if (!user || !hasUserPassword(user)) {
+    clearCurrentSession();
+    return false;
+  }
+  currentUser = user;
+  isAdmin = false;
+  currentPage = USER_PAGES.includes(session.page) ? session.page : 'dashboard';
+  return true;
+}
 
 function markUnsavedPrediction(key) {
   if (key) unsavedPredictionKeys.add(key);
@@ -1639,6 +1675,7 @@ function bindLoginPage() {
     currentUser = user;
     isAdmin = false;
     currentPage = 'dashboard';
+    saveCurrentSession(currentPage);
     render();
   }
 
@@ -1761,6 +1798,7 @@ function bindLoginPage() {
     const admin = loadData('admin', {});
     if (email === admin.email && pass === admin.password) {
       isAdmin = true; currentUser = null;
+      clearCurrentSession();
       adminPanel = 'results';
       render();
     } else {
@@ -1875,6 +1913,7 @@ function bindUserShell() {
   document.getElementById('logoutBtn').onclick = () => {
     if (!guardUnsavedPredictions()) return;
     clearAllUnsavedPredictions();
+    clearCurrentSession();
     currentUser = null; isAdmin = false; currentPage = 'login'; render();
   };
   bindPredictions();
@@ -1967,7 +2006,7 @@ function renderDashboard() {
             <span class="score-sep">:</span>
             <input type="number" class="panel-score-input" min="0" max="20" id="dash_a_${m.id}" value="${av}" ${locked?'disabled':''} placeholder="0" oninput="autoSaveDashboardPred('${m.id}')">
           </div>
-          ${locked ? `<span style="font-size:12px;color:var(--text3);font-weight:700">${pred?.submittedAt ? 'נשמר' : 'לא ניחשת'}</span>` : `<button class="btn btn-primary btn-sm" onclick="saveDashboardPrediction('${m.id}')">שמור ניחוש</button>`}
+          ${locked ? `<span style="font-size:12px;color:var(--text3);font-weight:700">${pred?.submittedAt ? 'נשמר' : 'לא ניחשת'}</span>` : `<button class="btn btn-primary btn-sm" type="button" onclick="saveDashboardPrediction('${m.id}')">שמור ניחוש</button>`}
         </div>
       </div>`;
   }).join('');
@@ -2035,7 +2074,7 @@ function renderDashboard() {
         <div style="font-size:14px;font-weight:700;color:var(--blue)">יש לך ${missing} ניחושים חסרים!</div>
         <div style="font-size:12px;color:var(--text2);margin-top:2px">המהר לנחש לפני נעילת המשחקים</div>
       </div>
-      <button class="btn btn-primary btn-sm" style="margin-right:auto" onclick="navTo('predictions')">נחש עכשיו</button>
+      <button class="btn btn-primary btn-sm" type="button" style="margin-right:auto" onclick="navTo('predictions')">נחש עכשיו</button>
     </div>` : ''}
     <div class="dashboard-grid">
       <div class="dashboard-main">
@@ -2251,7 +2290,7 @@ function renderPredictions() {
             </div>` : ''}
             <div class="match-footer">
               <div style="font-size:11px;color:var(--text3)">${pred?.submittedAt ? '✅ נשמר' : (locked ? 'לא ניחשת' : '')}</div>
-              ${!locked && !isScored ? `<button class="btn btn-primary btn-sm" onclick="savePrediction('${m.id}')">שמור</button>` : ''}
+              ${!locked && !isScored ? `<button class="btn btn-primary btn-sm" type="button" onclick="savePrediction('${m.id}')">שמור</button>` : ''}
             </div>
           </div>
         </div>`;
@@ -2323,7 +2362,7 @@ function renderPredictions() {
             </div>` : ''}
             <div class="match-footer">
               <div style="font-size:11px;color:var(--text3)">${pred?.submittedAt ? '✅ נשמר' : (locked ? 'לא ניחשת' : '')}</div>
-              ${!locked && !isScored ? `<button class="btn btn-primary btn-sm" onclick="saveKOPrediction('${m.id}')">שמור</button>` : ''}
+              ${!locked && !isScored ? `<button class="btn btn-primary btn-sm" type="button" onclick="saveKOPrediction('${m.id}')">שמור</button>` : ''}
             </div>
           </div>
         </div>`;
@@ -2888,6 +2927,7 @@ window.navTo = function(page) {
   if (page === currentPage) return;
   if (!guardUnsavedPredictions()) return;
   currentPage = page;
+  saveCurrentSession(page);
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pg = document.getElementById('page-'+page);
@@ -2956,6 +2996,7 @@ function renderAdminShell() {
 
 function bindAdminShell() {
   document.getElementById('adminLogoutBtn').onclick = () => {
+    clearCurrentSession();
     isAdmin = false; currentUser = null; currentPage = 'login'; render();
   };
   bindAdminActionDelegates();
@@ -4555,7 +4596,12 @@ async function bootstrapApp() {
   initUsers();
   initAdmin();
   await syncUsersFromCloud();
+  const restoredSession = restoreCurrentSession();
   await syncAppStateFromCloud();
+  if (restoredSession) {
+    refreshCurrentUserFromStore();
+    saveCurrentSession(currentPage);
+  }
   appStateCloudReady = true;
   render();
 }
