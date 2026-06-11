@@ -2579,7 +2579,7 @@ function renderDailyBonusPredictions(mySpecial={}) {
               ${optionsHtml}
             </select>
             ${savedAt ? `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">נשמר לאחרונה</div>` : ''}
-            <button class="btn btn-primary btn-sm btn-full" onclick="saveDailyBonus('${question.id}')">שמור שאלת בונוס</button>
+            <button class="btn btn-primary btn-sm btn-full" type="button" onclick="saveDailyBonus('${question.id}')">שמור שאלת בונוס</button>
           `}
         </div>
       </div>`;
@@ -2640,7 +2640,7 @@ function renderSpecialPredictions() {
               <option value="">${placeholder}</option>
               ${opts}
             </select>
-            <button class="btn btn-primary btn-sm btn-full" onclick="saveStageWinner('${id}','${storageKey}')">שמור</button>
+            <button class="btn btn-primary btn-sm btn-full" type="button" onclick="saveStageWinner('${id}','${storageKey}')">שמור</button>
           `}
         </div>
       </div>`;
@@ -2659,7 +2659,7 @@ function renderSpecialPredictions() {
             <option value="">-- בחר מנצחת בית ${grp} --</option>
             ${teams.map(t => `<option value="${escapeHtml(t)}" ${selected===t?'selected':''}>${teamText(t)}</option>`).join('')}
           </select>
-          ${!groupsLocked ? `<button class="btn btn-primary btn-sm btn-full" onclick="saveGroupWinner('${grp}')">שמור בחירה</button>` : ''}
+          ${!groupsLocked ? `<button class="btn btn-primary btn-sm btn-full" type="button" onclick="saveGroupWinner('${grp}')">שמור בחירה</button>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -2700,7 +2700,7 @@ function renderSpecialPredictions() {
           <input type="text" class="form-input" id="topScorerOtherInput" value="${tsIsOther ? tsSelected : ''}" oninput="markUnsavedPrediction('special:topScorer')"
             placeholder="שם השחקן" style="${tsIsOther ? '' : 'display:none'}">
           <div style="font-size:11px;color:var(--blue-light);margin-top:4px;font-weight:600">⏰ ייסגר אוטומטית ב-11.6 בשעה 22:00</div>
-          <button class="btn btn-primary btn-sm btn-full" style="margin-top:10px" onclick="saveTopScorer()">שמור מלך שערים</button>
+          <button class="btn btn-primary btn-sm btn-full" type="button" style="margin-top:10px" onclick="saveTopScorer()">שמור מלך שערים</button>
         `}
       </div>
     </div>
@@ -2754,7 +2754,7 @@ function renderSpecialPredictions() {
                 <option value="${escapeHtml(m.homeTeam)}" ${sel===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>
                 <option value="${escapeHtml(m.awayTeam)}" ${sel===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>
               </select>
-              <button class="btn btn-primary btn-sm btn-full" onclick="saveStageWinner('pred_${key}','${key}')">שמור</button>
+              <button class="btn btn-primary btn-sm btn-full" type="button" onclick="saveStageWinner('pred_${key}','${key}')">שמור</button>
             `}
           </div>
         </div>`;
@@ -2786,7 +2786,7 @@ function renderSpecialPredictions() {
                 <option value="${escapeHtml(m.homeTeam)}" ${sel===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>
                 <option value="${escapeHtml(m.awayTeam)}" ${sel===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>
               </select>
-              <button class="btn btn-primary btn-sm btn-full" onclick="saveStageWinner('pred_${key}','${key}')">שמור</button>
+              <button class="btn btn-primary btn-sm btn-full" type="button" onclick="saveStageWinner('pred_${key}','${key}')">שמור</button>
             `}
           </div>
         </div>`;
@@ -2801,6 +2801,15 @@ function renderSpecialPredictions() {
 }
 
 function bindSpecialPredictions() {}
+
+function refreshSpecialPredictionsPageIfClean() {
+  const pg = document.getElementById('page-special');
+  const content = pg?.querySelector('.content');
+  if (content && unsavedPredictionKeys.size === 0) {
+    content.innerHTML = renderSpecialPredictions();
+    bindSpecialPredictions();
+  }
+}
 
 window.saveDailyBonus = async function(questionId) {
   const question = getDailyBonusQuestion(questionId);
@@ -2820,12 +2829,7 @@ window.saveDailyBonus = async function(questionId) {
   saveData('specialPredictions', specials);
   clearUnsavedPrediction('special:dailyBonus:' + questionId);
   await showStateSaveToast('✅ שאלת הבונוס נשמרה', 'שאלת הבונוס נשמרה במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['specialPredictions']);
-
-  const pg = document.getElementById('page-special');
-  if (pg && unsavedPredictionKeys.size === 0) {
-    pg.querySelector('.content').innerHTML = renderSpecialPredictions();
-    bindSpecialPredictions();
-  }
+  refreshSpecialPredictionsPageIfClean();
 };
 
 window.toggleTopScorerOther = function() {
@@ -2846,6 +2850,7 @@ window.saveGroupWinner = async function(grp) {
   saveData('specialPredictions', specials);
   clearUnsavedPrediction('special:group_' + grp);
   await showStateSaveToast(`✅ נשמר: ${sel.value} מנצחת בית ${grp}`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['specialPredictions']);
+  refreshSpecialPredictionsPageIfClean();
 };
 
 window.saveTopScorer = async function() {
@@ -2862,6 +2867,7 @@ window.saveTopScorer = async function() {
   saveData('specialPredictions', specials);
   clearUnsavedPrediction('special:topScorer');
   await showStateSaveToast(`✅ נשמר: ${val} כמלך השערים שלך`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['specialPredictions']);
+  refreshSpecialPredictionsPageIfClean();
 };
 
 // Save any stage-winner prediction (knockout rounds / tournament winner)
@@ -2875,9 +2881,7 @@ window.saveStageWinner = async function(elId, key) {
   saveData('specialPredictions', specials);
   clearUnsavedPrediction('special:' + key);
   await showStateSaveToast(`✅ נשמר: ${sel.value}`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['specialPredictions']);
-  // Re-render the special page so selection shows immediately
-  const pg = document.getElementById('page-special');
-  if (pg && unsavedPredictionKeys.size === 0) { pg.querySelector('.content').innerHTML = renderSpecialPredictions(); bindSpecialPredictions(); }
+  refreshSpecialPredictionsPageIfClean();
 };
 
 // ============================================================
