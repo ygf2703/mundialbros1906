@@ -328,9 +328,13 @@ const SCORING = {
   dailyBonusExact: 3
 };
 
-// Top-scorer lock: 11 Jun 2026 22:00 Israel time (UTC+3 = 19:00 UTC)
-const TOP_SCORER_LOCK = new Date(2026, 5, 11, 22, 0, 0).getTime(); // local time
-function topScorerIsLocked() { return Date.now() >= TOP_SCORER_LOCK; }
+// Opening-match bonus lock: 11 Jun 2026 22:00 Israel time, the first match kickoff.
+const OPENING_MATCH_BONUS_LOCK = new Date(2026, 5, 11, 22, 0, 0).getTime(); // local time
+const OPENING_MATCH_BONUS_LOCK_LABEL = '11.6 בשעה 22:00';
+function openingMatchBonusIsLocked() { return Date.now() >= OPENING_MATCH_BONUS_LOCK; }
+function topScorerIsLocked() { return openingMatchBonusIsLocked(); }
+function groupStageBonusIsLocked() { return openingMatchBonusIsLocked() || loadData('specialsLocked', false); }
+function tournamentWinnerIsLocked() { return openingMatchBonusIsLocked(); }
 
 const GROUPS_DEF = {
   'א': ['מקסיקו','דרום קוריאה','צ\'כיה','דרום אפריקה'],
@@ -2161,7 +2165,7 @@ function renderRulesPage() {
           <ul class="rules-list">
             <li>ניחוש תוצאה למשחק נסגר ${SCORING.lockMinutes} דקות לפני שריקת הפתיחה של אותו משחק.</li>
             <li>שאלות בונוס יומיות נסגרות ${SCORING.lockMinutes} דקות לפני המשחק הראשון של אותו ערב משחקים.</li>
-            <li>מלך השערים נסגר בתאריך 11.6 בשעה 22:00.</li>
+            <li>מלך השערים, אלופת העולם ובונוסי שלב הבתים נסגרים בתאריך ${OPENING_MATCH_BONUS_LOCK_LABEL}, עם תחילת המשחק הראשון.</li>
             <li>הימורי נוקאאוט ובונוסים לפי שלב נסגרים לפני המשחק או השלב הרלוונטי כפי שמופיע במסך.</li>
             <li>אם בוצעו הימורים שלא נשמרו, המערכת תתריע: “בוצעו הימורים שלא נשמרו, שמור לפני יציאה”. ניחוש שלא נשמר לא ייחשב.</li>
           </ul>
@@ -2600,7 +2604,7 @@ function renderSpecialPredictions() {
   const specials = getSpecialPredictions();
   const mySpecial = specials[currentUser.id] || {};
   const groups = loadData('groups', GROUPS_DEF);
-  const groupsLocked = loadData('specialsLocked', false);
+  const groupsLocked = groupStageBonusIsLocked();
   const tsLocked = topScorerIsLocked();
   const koMatches = loadData('knockoutMatches', []);
 
@@ -2685,12 +2689,12 @@ function renderSpecialPredictions() {
     <div class="special-card" style="margin-bottom:12px">
       <div class="special-card-header">
         <div class="special-card-title">👑 מלך השערים</div>
-        <div style="font-size:11px;opacity:.7;margin-top:2px">בונוס: ${SCORING.topScorer} נקודות • נסגר 11.6 בשעה 22:00</div>
+        <div style="font-size:11px;opacity:.7;margin-top:2px">בונוס: ${SCORING.topScorer} נקודות • נסגר ${OPENING_MATCH_BONUS_LOCK_LABEL}</div>
       </div>
       <div class="special-card-body">
         ${tsLocked ? `
           <div style="font-size:14px;font-weight:600;color:var(--blue)">${tsSelected || 'לא מולא'}</div>
-          <div class="status-badge status-locked" style="margin-top:8px;display:inline-flex">🔒 נעול (11.6 22:00)</div>
+          <div class="status-badge status-locked" style="margin-top:8px;display:inline-flex">🔒 נעול (${OPENING_MATCH_BONUS_LOCK_LABEL})</div>
         ` : `
           <select class="form-input" id="topScorerSelect" onchange="toggleTopScorerOther(); markUnsavedPrediction('special:topScorer')" style="margin-bottom:8px">
             <option value="">-- בחר מלך שערים --</option>
@@ -2708,8 +2712,8 @@ function renderSpecialPredictions() {
     <!-- TOURNAMENT WINNER -->
     ${stageCard(
       'pred_tournament_winner', 'אלופת העולם', '🌍', SCORING.tournamentWinner,
-      fteams.length ? firstMatchLabel('final') : 'נסגר לפני הגמר',
-      fteams.length > 0 && matchIsLocked(koMatches.filter(m=>m.stage==='final').sort((a,b)=>a.startsAt-b.startsAt)[0]||{startsAt:Infinity}),
+      `נסגר ${OPENING_MATCH_BONUS_LOCK_LABEL}`,
+      tournamentWinnerIsLocked(),
       mySpecial.tournament_winner || '', sortTeamsAlpha(fteams.length ? fteams : allTeams),
       '-- מי תהיה אלופת העולם? --'
     )}
@@ -2795,7 +2799,7 @@ function renderSpecialPredictions() {
     <!-- GROUP WINNERS -->
     <div style="margin-top:16px">
       <div class="section-header"><h2 class="section-title" style="font-size:15px">🏆 מנצחות בתים</h2></div>
-      <p style="font-size:12px;color:var(--text3);margin-bottom:12px">בונוס ${SCORING.groupWinner} נקודות לכל בית נכון • נסגר לפני תחילת כל משחק</p>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:12px">בונוס ${SCORING.groupWinner} נקודות לכל בית נכון • נסגר ${OPENING_MATCH_BONUS_LOCK_LABEL}, תחילת המשחק הראשון</p>
       ${groupsHtml}
     </div>`;
 }
@@ -2841,6 +2845,7 @@ window.toggleTopScorerOther = function() {
 };
 
 window.saveGroupWinner = async function(grp) {
+  if (groupStageBonusIsLocked()) { showToast(`🔒 בונוסי שלב הבתים נעולים (${OPENING_MATCH_BONUS_LOCK_LABEL})`); return; }
   const sel = document.getElementById('gw_'+grp);
   if (!sel || !sel.value) { showToast('נא לבחור קבוצה'); return; }
   let specials = getSpecialPredictions();
@@ -2854,7 +2859,7 @@ window.saveGroupWinner = async function(grp) {
 };
 
 window.saveTopScorer = async function() {
-  if (topScorerIsLocked()) { showToast('🔒 ניחוש מלך השערים נעול (11.6 22:00)'); return; }
+  if (topScorerIsLocked()) { showToast(`🔒 ניחוש מלך השערים נעול (${OPENING_MATCH_BONUS_LOCK_LABEL})`); return; }
   const select = document.getElementById('topScorerSelect');
   const otherInput = document.getElementById('topScorerOtherInput');
   if (!select || !select.value) { showToast('נא לבחור שחקן'); return; }
@@ -2872,6 +2877,10 @@ window.saveTopScorer = async function() {
 
 // Save any stage-winner prediction (knockout rounds / tournament winner)
 window.saveStageWinner = async function(elId, key) {
+  if (key === 'tournament_winner' && tournamentWinnerIsLocked()) {
+    showToast(`🔒 ניחוש אלופת העולם נעול (${OPENING_MATCH_BONUS_LOCK_LABEL})`);
+    return;
+  }
   const sel = document.getElementById(elId);
   if (!sel || !sel.value) { showToast('נא לבחור קבוצה'); return; }
   let specials = getSpecialPredictions();
