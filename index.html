@@ -101,6 +101,7 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 /* Status badges */
 .status-badge{display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600}
 .status-open{background:#DCFCE7;color:#15803D}
+.status-saved{background:#D6E4FF;color:var(--blue)}
 .status-locked{background:#FFFBE6;color:var(--blue)}
 .status-finished{background:#F3F4F6;color:#6B7280}
 .status-scored{background:#D6E4FF;color:var(--blue)}
@@ -1469,6 +1470,14 @@ function matchIsLocked(match) {
   return Date.now() >= matchLockTime(match);
 }
 
+function predictionHasSavedPick(pred) {
+  return !!pred
+    && pred.predictedHomeScore !== null
+    && pred.predictedHomeScore !== undefined
+    && pred.predictedAwayScore !== null
+    && pred.predictedAwayScore !== undefined;
+}
+
 function matchPredictionLockedMessage() {
   return `ההימור למשחק הזה נעול. ניתן לשנות עד ${SCORING.lockMinutes} דקות לפני תחילת המשחק בלבד.`;
 }
@@ -2130,13 +2139,16 @@ function renderDashboard() {
   const upcomingHtml = upcomingPanel.map(m => {
     const pred = preds.find(p => p.matchId === m.id);
     const locked = matchIsLocked(m);
+    const saved = predictionHasSavedPick(pred);
     const hv = pred?.predictedHomeScore !== null && pred?.predictedHomeScore !== undefined ? pred.predictedHomeScore : '';
     const av = pred?.predictedAwayScore !== null && pred?.predictedAwayScore !== undefined ? pred.predictedAwayScore : '';
+    const statusClass = locked ? 'status-locked' : saved ? 'status-saved' : 'status-open';
+    const statusText = locked ? 'נעול' : saved ? '✓ נשמר' : 'פתוח לניחוש';
     return `
       <div class="panel-match">
         <div class="panel-match-head">
           <span class="panel-match-meta">${formatDate(m.date)} • ${m.time} • ${m.hostCity}</span>
-          <span class="status-badge ${locked ? 'status-locked' : 'status-open'}">${locked ? 'נעול' : 'פתוח לניחוש'}</span>
+          <span class="status-badge ${statusClass}">${statusText}</span>
         </div>
         <div class="panel-match-teams">${panelMatchupHtml(m.homeTeam, m.awayTeam)}</div>
         <div class="panel-score-line">
@@ -2145,7 +2157,7 @@ function renderDashboard() {
             <span class="score-sep">:</span>
             <input type="number" class="panel-score-input" min="0" max="20" id="dash_a_${m.id}" value="${av}" ${locked?'disabled':''} placeholder="0" oninput="autoSaveDashboardPred('${m.id}')">
           </div>
-          ${locked ? `<span style="font-size:12px;color:var(--text3);font-weight:700">${pred?.submittedAt ? 'נשמר' : 'לא ניחשת'}</span>` : `<button class="btn btn-primary btn-sm" type="button" onclick="saveDashboardPrediction('${m.id}')">שמור ניחוש</button>`}
+          ${locked ? `<span style="font-size:12px;color:var(--text3);font-weight:700">${saved ? 'נשמר' : 'לא ניחשת'}</span>` : `<button class="btn btn-primary btn-sm" type="button" onclick="saveDashboardPrediction('${m.id}')">${saved ? 'עדכן ניחוש' : 'שמור ניחוש'}</button>`}
         </div>
       </div>`;
   }).join('');
@@ -2536,11 +2548,13 @@ function renderPredictions() {
       const pred = preds.find(p => p.matchId === m.id);
       const locked = matchIsLocked(m);
       const isScored = m.status === 'scored';
+      const saved = predictionHasSavedPick(pred);
       
       let statusBadge = '';
       if (isScored) statusBadge = '<span class="status-badge status-scored">חושב ניקוד</span>';
       else if (m.status === 'finished') statusBadge = '<span class="status-badge status-finished">הסתיים</span>';
       else if (locked) statusBadge = '<span class="status-badge status-locked">🔒 נעול</span>';
+      else if (saved) statusBadge = '<span class="status-badge status-saved">✓ נשמר</span>';
       else statusBadge = '<span class="status-badge status-open">✓ פתוח</span>';
       
       let resultBadge = '';
@@ -2578,8 +2592,8 @@ function renderPredictions() {
               ${resultBadge}
             </div>` : ''}
             <div class="match-footer">
-              <div style="font-size:11px;color:var(--text3)">${pred?.submittedAt ? '✅ נשמר' : (locked ? 'לא ניחשת' : '')}</div>
-              ${!locked && !isScored ? `<button class="btn btn-primary btn-sm" type="button" onclick="savePrediction('${m.id}')">שמור</button>` : ''}
+              <div style="font-size:11px;color:var(--text3)">${saved ? '✅ ניחוש שמור' : (locked ? 'לא ניחשת' : '')}</div>
+              ${!locked && !isScored ? `<button class="btn btn-primary btn-sm" type="button" onclick="savePrediction('${m.id}')">${saved ? 'עדכן' : 'שמור'}</button>` : ''}
             </div>
           </div>
         </div>`;
@@ -2652,6 +2666,7 @@ window.savePrediction = async function(matchId) {
     existing.predictedHomeScore = h;
     existing.predictedAwayScore = a;
     existing.predictedOutcome = getOutcome(h,a);
+    existing.submittedAt = now;
     existing.updatedAt = now;
   } else {
     preds.push({
@@ -2666,12 +2681,7 @@ window.savePrediction = async function(matchId) {
   saveData('predictions', preds);
   clearUnsavedPrediction('match:' + matchId);
   await showStateSaveToast('✅ ניחוש נשמר!', '✅ ניחוש נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['predictions']);
-  
-  const el = hEl.closest('.match-card');
-  if (el) {
-    const footer = el.querySelector('.match-footer div');
-    if (footer) footer.textContent = '✅ נשמר';
-  }
+  refreshPredictionViewsIfClean();
 };
 
 window.autoSavePred = function(matchId) {
@@ -2719,6 +2729,7 @@ window.saveDashboardPrediction = async function(matchId) {
   saveData('predictions', preds);
   clearUnsavedPrediction('match:' + matchId);
   await showStateSaveToast('הניחוש נשמר', 'הניחוש נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['predictions']);
+  refreshPredictionViewsIfClean();
 };
 
 // ============================================================
