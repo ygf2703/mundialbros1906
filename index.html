@@ -350,12 +350,12 @@ const SCORING = {
   dailyBonusExact: 3
 };
 
-// Opening-match bonus lock: 11 Jun 2026 22:00 Israel time, the first match kickoff.
-const OPENING_MATCH_BONUS_LOCK = new Date(2026, 5, 11, 22, 0, 0).getTime(); // local time
-const OPENING_MATCH_BONUS_LOCK_LABEL = '11.6 בשעה 22:00';
+// Main pre-tournament bonus lock: 13 Jun 2026 22:00 Israel time.
+const OPENING_MATCH_BONUS_LOCK = new Date(2026, 5, 13, 22, 0, 0).getTime(); // local time
+const OPENING_MATCH_BONUS_LOCK_LABEL = '13.6 בשעה 22:00';
 function openingMatchBonusIsLocked() { return Date.now() >= OPENING_MATCH_BONUS_LOCK; }
 function topScorerIsLocked() { return openingMatchBonusIsLocked(); }
-function groupStageBonusIsLocked() { return openingMatchBonusIsLocked() || loadData('specialsLocked', false); }
+function groupStageBonusIsLocked() { return openingMatchBonusIsLocked(); }
 function tournamentWinnerIsLocked() { return openingMatchBonusIsLocked(); }
 
 const GROUPS_DEF = {
@@ -2277,7 +2277,7 @@ function renderRulesPage() {
           <ul class="rules-list">
             <li>ניחוש תוצאה למשחק נסגר ${SCORING.lockMinutes} דקות לפני שריקת הפתיחה של אותו משחק.</li>
             <li>שאלות בונוס יומיות נסגרות ${SCORING.lockMinutes} דקות לפני המשחק הראשון של אותו ערב משחקים.</li>
-            <li>מלך השערים, אלופת העולם ובונוסי שלב הבתים נסגרים בתאריך ${OPENING_MATCH_BONUS_LOCK_LABEL}, עם תחילת המשחק הראשון.</li>
+            <li>מלך השערים, אלופת העולם ובונוסי שלב הבתים נסגרים בתאריך ${OPENING_MATCH_BONUS_LOCK_LABEL}.</li>
             <li>הימורי נוקאאוט ובונוסים לפי שלב נסגרים לפני המשחק או השלב הרלוונטי כפי שמופיע במסך.</li>
             <li>אם בוצעו הימורים שלא נשמרו, המערכת תתריע: “בוצעו הימורים שלא נשמרו, שמור לפני יציאה”. ניחוש שלא נשמר לא ייחשב.</li>
           </ul>
@@ -2895,7 +2895,7 @@ function renderSpecialPredictions() {
           </select>
           <input type="text" class="form-input" id="topScorerOtherInput" value="${tsIsOther ? tsSelected : ''}" oninput="markUnsavedPrediction('special:topScorer')"
             placeholder="שם השחקן" style="${tsIsOther ? '' : 'display:none'}">
-          <div style="font-size:11px;color:var(--blue-light);margin-top:4px;font-weight:600">⏰ ייסגר אוטומטית ב-11.6 בשעה 22:00</div>
+          <div style="font-size:11px;color:var(--blue-light);margin-top:4px;font-weight:600">⏰ ייסגר אוטומטית ב-${OPENING_MATCH_BONUS_LOCK_LABEL}</div>
           <button class="btn btn-primary btn-sm btn-full" type="button" style="margin-top:10px" onclick="saveTopScorer()">שמור מלך שערים</button>
         `}
       </div>
@@ -2991,7 +2991,7 @@ function renderSpecialPredictions() {
     <!-- GROUP WINNERS -->
     <div style="margin-top:16px">
       <div class="section-header"><h2 class="section-title" style="font-size:15px">🏆 מנצחות בתים</h2></div>
-      <p style="font-size:12px;color:var(--text3);margin-bottom:12px">בונוס ${SCORING.groupWinner} נקודות לכל בית נכון • נסגר ${OPENING_MATCH_BONUS_LOCK_LABEL}, תחילת המשחק הראשון</p>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:12px">בונוס ${SCORING.groupWinner} נקודות לכל בית נכון • נסגר ${OPENING_MATCH_BONUS_LOCK_LABEL}</p>
       ${groupsHtml}
     </div>`;
 }
