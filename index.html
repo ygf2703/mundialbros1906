@@ -163,7 +163,7 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .dashboard-kpi{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);border-radius:var(--radius-sm);padding:12px;text-align:center;backdrop-filter:blur(6px)}
 .dashboard-kpi strong{display:block;font-family:'Rubik',sans-serif;font-size:28px;font-weight:900;line-height:1;color:white}
 .dashboard-kpi span{display:block;font-size:11px;color:rgba(255,255,255,.74);font-weight:700;margin-top:5px}
-.dashboard-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.dashboard-actions{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
 .dashboard-action{min-height:68px;border:1px solid rgba(197,213,240,.9);border-radius:var(--radius-sm);background:rgba(255,255,255,.92);color:var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:800;box-shadow:var(--shadow);backdrop-filter:blur(8px)}
 .dashboard-action strong{font-family:'Rubik',sans-serif;font-size:18px;line-height:1}
 .dashboard-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:16px;align-items:start}
@@ -296,7 +296,29 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .rules-list{display:flex;flex-direction:column;gap:9px;color:var(--text2);font-size:13px;line-height:1.45}
 .rules-list li{margin-right:18px}
 .rules-note{background:var(--yellow-pale);border:1px solid var(--yellow);border-radius:var(--radius-sm);padding:12px 14px;color:var(--blue);font-size:13px;font-weight:700;line-height:1.45}
-@media(max-width:760px){.rules-grid{grid-template-columns:1fr}.bottom-nav .nav-item{font-size:9px;padding-inline:2px}}
+.knockout-page{display:flex;flex-direction:column;gap:16px}
+.knockout-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,rgba(13,36,81,.98),rgba(26,74,138,.9) 58%,rgba(245,197,24,.78));color:white;border:1px solid rgba(255,255,255,.22);border-bottom:3px solid var(--yellow);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+.knockout-hero h2{font-size:26px;font-weight:900;margin-bottom:6px}
+.knockout-hero p{font-size:13px;color:rgba(255,255,255,.78);font-weight:600;line-height:1.45;max-width:720px}
+.knockout-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.knockout-kpi{background:rgba(255,255,255,.93);border:1px solid rgba(197,213,240,.86);border-radius:var(--radius-sm);box-shadow:var(--shadow);padding:12px;text-align:center}
+.knockout-kpi strong{display:block;font-family:'Rubik',sans-serif;font-size:24px;font-weight:900;color:var(--blue);line-height:1}
+.knockout-kpi span{display:block;font-size:11px;color:var(--text3);font-weight:700;margin-top:5px}
+.knockout-bracket{display:grid;grid-template-columns:repeat(4,minmax(230px,1fr));gap:14px;align-items:start;overflow-x:auto;padding-bottom:8px}
+.knockout-stage{min-width:230px;display:flex;flex-direction:column;gap:10px}
+.knockout-stage-head{background:var(--blue);color:var(--yellow);border-bottom:2px solid var(--yellow);border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;font-weight:900}
+.knockout-slot{background:rgba(255,255,255,.94);border:1px solid rgba(197,213,240,.86);border-radius:var(--radius-sm);box-shadow:var(--shadow);padding:12px;min-height:132px;display:flex;flex-direction:column;gap:9px;justify-content:space-between;backdrop-filter:blur(8px)}
+.knockout-slot.empty{border-style:dashed;background:rgba(255,255,255,.72);box-shadow:none;color:var(--text3)}
+.knockout-slot-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.knockout-slot-title{font-size:11px;font-weight:800;color:var(--text3)}
+.knockout-team-line{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;font-weight:800;color:var(--blue);line-height:1.25}
+.knockout-team-line .team-label{justify-content:flex-start}
+.knockout-score{font-family:'Rubik',sans-serif;font-size:18px;font-weight:900;color:var(--blue);white-space:nowrap}
+.knockout-meta{font-size:11px;color:var(--text3);font-weight:700;display:flex;gap:8px;flex-wrap:wrap}
+.knockout-readonly{display:inline-flex;align-items:center;border-radius:20px;background:var(--yellow-pale);border:1px solid var(--yellow);color:var(--blue);padding:4px 10px;font-size:11px;font-weight:800}
+.knockout-extra{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+@media(max-width:900px){.knockout-kpis{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){.rules-grid{grid-template-columns:1fr}.bottom-nav .nav-item{font-size:8px;padding-inline:1px}.nav-item svg{width:20px;height:20px}.knockout-hero h2{font-size:22px}.knockout-kpis{grid-template-columns:1fr 1fr}}
 
 /* Responsive */
 @media(min-width:640px){
@@ -1550,7 +1572,8 @@ let isAdmin = false;
 let currentPage = 'login';
 let adminPanel = 'results';
 let pendingUserImport = [];
-const USER_PAGES = ['dashboard','predictions','special','leaderboard','rules'];
+let pendingKOMatchImport = [];
+const USER_PAGES = ['dashboard','predictions','knockout','special','leaderboard','rules'];
 const UNSAVED_PREDICTIONS_MESSAGE = 'בוצעו הימורים שלא נשמרו, שמור לפני יציאה';
 const unsavedPredictionKeys = new Set();
 
@@ -1915,6 +1938,7 @@ function renderUserShell() {
   const pages = {
     dashboard: renderDashboard(),
     predictions: renderPredictions(),
+    knockout: renderKnockoutPage(),
     special: renderSpecialPredictions(),
     leaderboard: renderLeaderboard(),
     rules: renderRulesPage()
@@ -1948,6 +1972,9 @@ function renderUserShell() {
       <div class="page${currentPage==='predictions'?' active':''}" id="page-predictions">
         <div class="content">${pages.predictions}</div>
       </div>
+      <div class="page${currentPage==='knockout'?' active':''}" id="page-knockout">
+        <div class="content dashboard-content">${pages.knockout}</div>
+      </div>
       <div class="page${currentPage==='special'?' active':''}" id="page-special">
         <div class="content">${pages.special}</div>
       </div>
@@ -1970,6 +1997,10 @@ function renderUserShell() {
           ${getMissingCount()>0?`<span class="nav-badge">${getMissingCount()}</span>`:''}
         </div>
         ניחושים
+      </button>
+      <button class="nav-item${currentPage==='knockout'?' active':''}" onclick="navTo('knockout')">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 4h6a3 3 0 010 6H9a3 3 0 000 6h2a3 3 0 010 6H5"/><path d="M19 4h-6m6 6h-6m6 6h-6m6 6h-6"/></svg>
+        נוקאאוט
       </button>
       <button class="nav-item${currentPage==='special'?' active':''}" onclick="navTo('special')">
         <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
@@ -2114,6 +2145,7 @@ function renderDashboard() {
   const dashboardActionsHtml = `
     <div class="dashboard-actions">
       <button class="dashboard-action" onclick="navTo('predictions')"><strong>${missing}</strong><span>ניחושים חסרים</span></button>
+      <button class="dashboard-action" onclick="navTo('knockout')"><strong>8</strong><span>נוקאאוט</span></button>
       <button class="dashboard-action" onclick="navTo('special')"><strong>★</strong><span>בונוסים</span></button>
       <button class="dashboard-action" onclick="navTo('leaderboard')"><strong>${rank}</strong><span>המקום שלך</span></button>
       <button class="dashboard-action" onclick="navTo('rules')"><strong>?</strong><span>איך משחקים</span></button>
@@ -2301,14 +2333,163 @@ function renderRulesPage() {
 }
 
 // ============================================================
+// KNOCKOUT PAGE
+// ============================================================
+const KNOCKOUT_STAGE_LABELS = {
+  round_of_32: '32 האחרונות',
+  round_of_16: 'שמינית גמר',
+  quarter_final: 'רבע גמר',
+  semi_final: 'חצי גמר',
+  third_place: 'מקום שלישי',
+  final: 'גמר'
+};
+const KNOCKOUT_MAIN_STAGES = ['round_of_16','quarter_final','semi_final','final'];
+const KNOCKOUT_STAGE_SLOTS = {round_of_16: 8, quarter_final: 4, semi_final: 2, final: 1};
+
+function knockoutStageLabel(stage) {
+  return KNOCKOUT_STAGE_LABELS[stage] || stage || 'נוקאאוט';
+}
+
+function normalizeKnockoutStage(value) {
+  const raw = (value || '').toString().trim();
+  const slug = raw.toLowerCase().replace(/[-\s]+/g, '_');
+  const words = raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (KNOCKOUT_STAGE_LABELS[slug]) return slug;
+  if (slug === 'r16' || words.includes('שמינית') || words === '16') return 'round_of_16';
+  if (slug === 'qf' || words.includes('רבע') || words === '8') return 'quarter_final';
+  if (slug === 'sf' || words.includes('חצי') || words === '4') return 'semi_final';
+  if (slug === 'third_place' || words.includes('שלישי')) return 'third_place';
+  if (slug === 'final' || (words.includes('גמר') && !words.includes('חצי') && !words.includes('רבע') && !words.includes('שמינית'))) return 'final';
+  return slug || 'round_of_16';
+}
+
+function knockoutStageOrder(stage) {
+  const order = [...KNOCKOUT_MAIN_STAGES, 'third_place'];
+  const index = order.indexOf(stage);
+  return index === -1 ? 99 : index;
+}
+
+function sortedKnockoutMatches(matches) {
+  return [...(matches || [])].sort((a,b) => {
+    const stageDiff = knockoutStageOrder(a.stage) - knockoutStageOrder(b.stage);
+    if (stageDiff) return stageDiff;
+    return Number(a.startsAt || 0) - Number(b.startsAt || 0);
+  });
+}
+
+function knockoutMatchResultText(match) {
+  const hasScore = match?.actualHomeScore !== null && match?.actualHomeScore !== undefined
+    && match?.actualAwayScore !== null && match?.actualAwayScore !== undefined;
+  if (!hasScore) return '';
+  return `${match.actualHomeScore}:${match.actualAwayScore}`;
+}
+
+function renderKnockoutSlot(stage, match, index) {
+  const title = `${knockoutStageLabel(stage)} ${index + 1}`;
+  if (!match) {
+    return `
+      <div class="knockout-slot empty">
+        <div class="knockout-slot-top">
+          <span class="knockout-slot-title">${title}</span>
+          <span class="knockout-readonly">צפייה בלבד</span>
+        </div>
+        <div class="empty-text" style="font-size:14px">ייקבע בהמשך</div>
+        <div class="empty-hint">יעודכן אחרי העלאת משחקי הנוקאאוט</div>
+      </div>`;
+  }
+
+  const result = knockoutMatchResultText(match);
+  const statusText = result ? 'תוצאה עודכנה' : 'טרם שוחק';
+  const scoreText = result || 'נגד';
+  const dateText = [match.date ? formatDate(match.date) : '', match.time || '', match.hostCity || ''].filter(Boolean).join(' • ');
+  const advancingHtml = match.advancingTeam
+    ? `<div class="knockout-meta"><span>עולה:</span><strong>${teamText(match.advancingTeam)}</strong></div>`
+    : '';
+
+  return `
+    <div class="knockout-slot">
+      <div class="knockout-slot-top">
+        <span class="knockout-slot-title">${escapeHtml(title)}</span>
+        <span class="status-badge ${result ? 'status-scored' : 'status-locked'}">${statusText}</span>
+      </div>
+      <div>
+        <div class="knockout-team-line">
+          <span>${teamHtml(match.homeTeam || 'ייקבע בהמשך')}</span>
+          <span class="knockout-score">${escapeHtml(scoreText)}</span>
+        </div>
+        <div class="knockout-team-line" style="margin-top:7px">
+          <span>${teamHtml(match.awayTeam || 'ייקבע בהמשך')}</span>
+          <span></span>
+        </div>
+      </div>
+      ${dateText ? `<div class="knockout-meta"><span>${escapeHtml(dateText)}</span></div>` : ''}
+      ${advancingHtml}
+    </div>`;
+}
+
+function renderKnockoutStage(stage, stageMatches) {
+  const slots = Math.max(KNOCKOUT_STAGE_SLOTS[stage] || 0, stageMatches.length);
+  return `
+    <section class="knockout-stage">
+      <div class="knockout-stage-head">${knockoutStageLabel(stage)}</div>
+      ${Array.from({length: slots}, (_, i) => renderKnockoutSlot(stage, stageMatches[i], i)).join('')}
+    </section>`;
+}
+
+function renderKnockoutPage() {
+  const koMatches = sortedKnockoutMatches(loadData('knockoutMatches', []))
+    .filter(m => m && KNOCKOUT_MAIN_STAGES.includes(m.stage));
+  const extraMatches = sortedKnockoutMatches(loadData('knockoutMatches', []))
+    .filter(m => m && m.stage === 'third_place');
+  const byStage = {};
+  KNOCKOUT_MAIN_STAGES.forEach(stage => byStage[stage] = []);
+  koMatches.forEach(match => {
+    if (!byStage[match.stage]) byStage[match.stage] = [];
+    byStage[match.stage].push(match);
+  });
+
+  const finishedCount = [...koMatches, ...extraMatches].filter(knockoutMatchResultText).length;
+  const totalKnown = koMatches.length + extraMatches.length;
+  const r16Known = byStage.round_of_16?.length || 0;
+  const upcoming = [...koMatches, ...extraMatches]
+    .filter(m => Number(m.startsAt || 0) > Date.now())
+    .sort((a,b) => Number(a.startsAt || 0) - Number(b.startsAt || 0))[0];
+  const nextText = upcoming ? `${knockoutStageLabel(upcoming.stage)} • ${formatDate(upcoming.date)} ${upcoming.time || ''}` : (totalKnown ? 'ממתינים לעדכון' : 'טרם הועלה CSV');
+
+  return `
+    <div class="knockout-page">
+      <section class="knockout-hero">
+        <h2>נוקאאוט</h2>
+        <p>שלב ההכרעה מוצג כאן החל משמינית הגמר. כרגע זהו מסך צפייה בלבד; המשחקים יתעדכנו לפי קובץ CSV שיועלה בניהול.</p>
+      </section>
+
+      <div class="knockout-kpis">
+        <div class="knockout-kpi"><strong>${totalKnown}</strong><span>משחקים הוזנו</span></div>
+        <div class="knockout-kpi"><strong>${r16Known}/8</strong><span>שמינית גמר</span></div>
+        <div class="knockout-kpi"><strong>${finishedCount}</strong><span>תוצאות עודכנו</span></div>
+        <div class="knockout-kpi"><strong style="font-size:16px">${escapeHtml(nextText)}</strong><span>המשחק הבא</span></div>
+      </div>
+
+      <div class="knockout-bracket">
+        ${KNOCKOUT_MAIN_STAGES.map(stage => renderKnockoutStage(stage, byStage[stage] || [])).join('')}
+      </div>
+
+      ${extraMatches.length ? `
+        <section>
+          <div class="section-header"><h2 class="section-title">מקום שלישי</h2></div>
+          <div class="knockout-extra">
+            ${extraMatches.map((match, i) => renderKnockoutSlot('third_place', match, i)).join('')}
+          </div>
+        </section>` : ''}
+    </div>`;
+}
+
+// ============================================================
 // PREDICTIONS PAGE
 // ============================================================
 function renderPredictions() {
   const matches = loadData('matches',[]).filter(m => m.stage === 'group').sort((a,b) => a.startsAt - b.startsAt);
-  const koMatches = loadData('knockoutMatches',[]).sort((a,b) => a.startsAt - b.startsAt);
   const preds = loadData('predictions',[]).filter(p => p.userId === currentUser.id);
-  const koPreds = loadData('knockoutPredictions',[]).filter(p => p.userId === currentUser.id);
-  const stageLabels = {round_of_32:'32 האחרונות',round_of_16:'שמינית גמר',quarter_final:'רבע גמר',semi_final:'חצי גמר',third_place:'מקום שלישי',final:'גמר'};
   
   // Group by date
   const byDate = {};
@@ -2380,78 +2561,6 @@ function renderPredictions() {
         </div>`;
     });
   });
-  
-  // Knockout matches section
-  if (koMatches.length > 0) {
-    html += `<div class="section-header" style="margin-top:24px"><h2 class="section-title">⚡ ניחושי שלב הנוקאאוט</h2></div>
-    <div style="background:var(--blue);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--yellow);display:flex;gap:12px;flex-wrap:wrap">
-      <span>🎯 תוצאה מדויקת = <strong style="color:white">7 נק'</strong></span>
-      <span>↗ כיוון נכון = <strong style="color:white">3 נק'</strong></span>
-      <span>⬆️ עולה נכון = <strong style="color:white">+4 נק'</strong></span>
-    </div>`;
-    
-    koMatches.forEach(m => {
-      const pred = koPreds.find(p => p.matchId === m.id);
-      const locked = matchIsLocked(m);
-      const isScored = m.status === 'scored';
-      const stageLabel = stageLabels[m.stage] || m.stage;
-      
-      let statusBadge = '';
-      if (isScored) statusBadge = '<span class="status-badge status-scored">חושב ניקוד</span>';
-      else if (m.status === 'finished') statusBadge = '<span class="status-badge status-finished">הסתיים</span>';
-      else if (locked) statusBadge = '<span class="status-badge status-locked">🔒 נעול</span>';
-      else statusBadge = '<span class="status-badge status-open">✓ פתוח</span>';
-      
-      let resultBadge = '';
-      if (isScored && pred?.scoreAwarded !== undefined) {
-        if (pred.isExact) resultBadge = `<span class="score-result result-exact">+${SCORING.knockoutExact} נק'</span>`;
-        else if (pred.isOutcomeCorrect) resultBadge = `<span class="score-result result-direction">+${SCORING.knockoutOutcome} נק'</span>`;
-        else if (pred.predictedHomeScore !== null) resultBadge = '<span class="score-result result-miss">0 נק\'</span>';
-      }
-      
-      const hv = pred?.predictedHomeScore !== null && pred?.predictedHomeScore !== undefined ? pred.predictedHomeScore : '';
-      const av = pred?.predictedAwayScore !== null && pred?.predictedAwayScore !== undefined ? pred.predictedAwayScore : '';
-      
-      html += `
-        <div class="match-card">
-          <div class="match-card-header" style="background:linear-gradient(135deg,var(--blue) 0%,var(--blue-light) 100%)">
-            <span class="match-meta">⚡ ${stageLabel} • ${m.time} • 📍 ${m.hostCity}</span>
-            ${statusBadge}
-          </div>
-          <div class="match-body">
-            <div class="match-teams">
-              ${matchupHtml(m.homeTeam, m.awayTeam)}
-            </div>
-            <div class="score-inputs">
-              <input type="number" class="score-input" min="0" max="20" 
-                id="kh_${m.id}" value="${hv}" ${locked||isScored?'disabled':''} 
-                placeholder="0" oninput="autoSaveKOPred('${m.id}')" onchange="autoSaveKOPred('${m.id}')">
-              <span class="score-sep">:</span>
-              <input type="number" class="score-input" min="0" max="20" 
-                id="ka_${m.id}" value="${av}" ${locked||isScored?'disabled':''} 
-                placeholder="0" oninput="autoSaveKOPred('${m.id}')" onchange="autoSaveKOPred('${m.id}')">
-            </div>
-            ${!locked && !isScored ? `
-            <div style="margin-top:10px">
-              <select class="form-input" id="kadv_${m.id}" onchange="autoSaveKOPred('${m.id}')" style="font-size:13px">
-                <option value="${pred?.predictedAdvancingTeam||''}">-- מי עולה לשלב הבא? --</option>
-                <option value="${escapeHtml(m.homeTeam)}" ${pred?.predictedAdvancingTeam===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>
-                <option value="${escapeHtml(m.awayTeam)}" ${pred?.predictedAdvancingTeam===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>
-              </select>
-            </div>` : pred?.predictedAdvancingTeam ? `<div style="text-align:center;margin-top:6px;font-size:12px;color:var(--text2)">עולה: <strong>${pred.predictedAdvancingTeam}</strong></div>` : ''}
-            ${m.actualHomeScore !== null ? `
-            <div style="text-align:center;margin-top:8px;font-size:13px;color:var(--text2)">
-              תוצאה: <strong>${m.actualHomeScore}:${m.actualAwayScore}</strong>
-              ${resultBadge}
-            </div>` : ''}
-            <div class="match-footer">
-              <div style="font-size:11px;color:var(--text3)">${pred?.submittedAt ? '✅ נשמר' : (locked ? 'לא ניחשת' : '')}</div>
-              ${!locked && !isScored ? `<button class="btn btn-primary btn-sm" type="button" onclick="saveKOPrediction('${m.id}')">שמור</button>` : ''}
-            </div>
-          </div>
-        </div>`;
-    });
-  }
   
   return html;
 }
@@ -3032,6 +3141,7 @@ window.navTo = function(page) {
     pg.querySelector('.content').innerHTML = (() => {
       if (page === 'dashboard') return renderDashboard();
       if (page === 'predictions') return renderPredictions();
+      if (page === 'knockout') return renderKnockoutPage();
       if (page === 'special') return renderSpecialPredictions();
       if (page === 'leaderboard') return renderLeaderboard();
       if (page === 'rules') return renderRulesPage();
@@ -3040,7 +3150,7 @@ window.navTo = function(page) {
     if (page === 'dashboard') startCountdown;
   }
   const navBtns = document.querySelectorAll('.nav-item');
-  const pageIndex = ['dashboard','predictions','special','leaderboard','rules'].indexOf(page);
+  const pageIndex = ['dashboard','predictions','knockout','special','leaderboard','rules'].indexOf(page);
   if (navBtns[pageIndex]) navBtns[pageIndex].classList.add('active');
   window.scrollTo(0,0);
 };
@@ -3181,7 +3291,7 @@ window.switchAdminPanel = function(panel) {
       if (panel==='matches') return renderAdminMatches();
       if (panel==='groups') return renderAdminGroups();
       if (panel==='daily-bonus') return renderAdminDailyBonus();
-      if (panel==='knockout') return renderAdminKnockout();
+      if (panel==='knockout') { setTimeout(bindAdminKnockoutUpload,50); return renderAdminKnockout(); }
       if (panel==='topscorer') return renderAdminTopScorer();
       if (panel==='upload-users') { setTimeout(bindUploadUsers,50); return renderUploadUsers(); }
       if (panel==='upload-matches') { setTimeout(bindUploadMatches,50); return renderUploadMatches(); }
@@ -4119,7 +4229,7 @@ window.calcKnockoutStageBonus = async function(stage, keyPrefix, matchCount) {
 // ============================================================
 function renderAdminKnockout() {
   const koMatches = loadData('knockoutMatches', []);
-  const stageLabels = {round_of_32:'32 האחרונות',round_of_16:'שמינית גמר',quarter_final:'רבע גמר',semi_final:'חצי גמר',third_place:'מקום שלישי',final:'גמר'};
+  const stageLabels = KNOCKOUT_STAGE_LABELS;
   
   return `
     <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">⚡ ניהול שלב הנוקאאוט</h2>
@@ -4128,6 +4238,23 @@ function renderAdminKnockout() {
       <button class="btn btn-yellow btn-sm" onclick="calcKnockoutStageBonus('round_of_16','r16',16)">חשב בונוס שמינית גמר</button>
       <button class="btn btn-yellow btn-sm" onclick="calcKnockoutStageBonus('quarter_final','qf',8)">חשב בונוס רבע גמר</button>
       <button class="btn btn-yellow btn-sm" onclick="calcKnockoutStageBonus('semi_final','sf',4)">חשב בונוס חצי גמר</button>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><span class="card-title">ייבוא CSV נוקאאוט</span></div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
+          פורמט מומלץ: שלב, תאריך, שעה, המשחק, עיר מארחת. לדוגמה: שמינית גמר,29.6,21:00,מנצחת בית א - סגנית בית ב,דאלאס
+        </p>
+        <div class="file-drop" id="koFileDrop" style="cursor:pointer">
+          <input type="file" accept=".csv" id="koFileInput" style="display:none">
+          <div class="file-drop-icon">📁</div>
+          <div class="file-drop-text">לחץ לבחירת קובץ CSV נוקאאוט</div>
+          <div class="file-drop-hint">שלבים נתמכים: שמינית גמר, רבע גמר, חצי גמר, גמר, מקום שלישי</div>
+        </div>
+        <div id="koUploadError"></div>
+        <div id="koPreview"></div>
+      </div>
     </div>
     
     <div class="card" style="margin-bottom:16px">
@@ -4200,6 +4327,153 @@ function renderAdminKnockout() {
       <div class="empty-hint">הוסף משחקים לאחר סיום שלב הבתים</div>
     </div>`}`;
 }
+
+function bindAdminKnockoutUpload() {
+  const inp = document.getElementById('koFileInput');
+  const drop = document.getElementById('koFileDrop');
+  if (!inp || !drop) return;
+  drop.onclick = () => inp.click();
+  inp.onchange = e => processKOMatchesFile(e.target.files[0]);
+  drop.ondragover = e => { e.preventDefault(); };
+  drop.ondrop = e => { e.preventDefault(); processKOMatchesFile(e.dataTransfer.files[0]); };
+}
+
+function processKOMatchesFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const result = parseKOMatchesCsv(e.target.result);
+      if (result.errors.length > 0) {
+        document.getElementById('koUploadError').innerHTML = result.errors.map(err => `<div class="form-error">${escapeHtml(err)}</div>`).join('');
+        return;
+      }
+      document.getElementById('koUploadError').innerHTML = '';
+      showKOMatchesPreview(result.matches);
+    } catch(err) {
+      document.getElementById('koUploadError').innerHTML = `<div class="form-error">שגיאה בעיבוד הקובץ: ${escapeHtml(err.message)}</div>`;
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function csvHeaderIndex(headers, names, fallback) {
+  const normalized = headers.map(h => (h || '').toString().trim().toLowerCase());
+  const index = normalized.findIndex(header => names.some(name => header.includes(name)));
+  return index >= 0 ? index : fallback;
+}
+
+function splitMatchTeams(game) {
+  const text = (game || '').toString().trim().replace(/^"|"$/g, '');
+  const separators = [' – ', ' - ', ' נגד ', '–', '-'];
+  for (const sep of separators) {
+    if (!text.includes(sep)) continue;
+    const parts = text.split(sep).map(p => p.trim()).filter(Boolean);
+    if (parts.length >= 2) return [parts[0], parts.slice(1).join(sep).trim()];
+  }
+  return ['', ''];
+}
+
+function parseKOMatchesCsv(csvText) {
+  const rows = parseCsvRows(csvText.replace(/\uFEFF/g, '')).filter(row => row.some(c => (c || '').trim()));
+  if (rows.length < 1) return {matches: [], errors: ['לא נמצאו משחקי נוקאאוט בקובץ']};
+
+  const firstRow = rows[0].map(c => (c || '').trim());
+  const hasHeader = firstRow.some(cell => /שלב|stage|תאריך|date|משחק|game|עיר|city/i.test(cell));
+  const headers = hasHeader ? firstRow : [];
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+  const noHeaderDateFirst = !hasHeader && /^\d{1,2}\.\d{1,2}/.test((dataRows[0]?.[0] || '').trim());
+  const stageIndex = hasHeader ? csvHeaderIndex(headers, ['שלב','stage'], -1) : (noHeaderDateFirst ? -1 : 0);
+  const indexes = {
+    stage: stageIndex,
+    date: hasHeader ? csvHeaderIndex(headers, ['תאריך','date'], stageIndex >= 0 ? 1 : 0) : (noHeaderDateFirst ? 0 : 1),
+    time: hasHeader ? csvHeaderIndex(headers, ['שעה','time'], stageIndex >= 0 ? 2 : 1) : (noHeaderDateFirst ? 1 : 2),
+    game: hasHeader ? csvHeaderIndex(headers, ['משחק','game','מפגש'], stageIndex >= 0 ? 3 : 2) : (noHeaderDateFirst ? 2 : 3),
+    city: hasHeader ? csvHeaderIndex(headers, ['עיר','city','מארחת'], stageIndex >= 0 ? 4 : 3) : (noHeaderDateFirst ? 3 : 4)
+  };
+
+  const matches = [];
+  const errors = [];
+  dataRows.forEach((cols, rowIndex) => {
+    const lineNumber = (hasHeader ? rowIndex + 2 : rowIndex + 1);
+    const stage = normalizeKnockoutStage(indexes.stage >= 0 ? cols[indexes.stage] : 'round_of_16');
+    const date = (cols[indexes.date] || '').trim();
+    const time = (cols[indexes.time] || '').trim();
+    const game = (cols[indexes.game] || '').trim();
+    const city = (cols[indexes.city] || '').trim();
+    if (!date && !game) return;
+    if (!KNOCKOUT_STAGE_LABELS[stage]) { errors.push(`שורה ${lineNumber}: שלב נוקאאוט לא מזוהה`); return; }
+    if (!date.includes('.')) { errors.push(`שורה ${lineNumber}: פורמט תאריך לא תקין: ${date}`); return; }
+
+    const [homeTeam, awayTeam] = splitMatchTeams(game);
+    if (!homeTeam || !awayTeam) { errors.push(`שורה ${lineNumber}: לא ניתן לפרק את המשחק: ${game}`); return; }
+
+    const [day, month] = date.split('.');
+    const [hh, mm] = (time || '00:00').split(':');
+    const startsAt = new Date(2026, parseInt(month)-1, parseInt(day), parseInt(hh)||0, parseInt(mm)||0).getTime();
+    if (!Number.isFinite(startsAt)) { errors.push(`שורה ${lineNumber}: תאריך או שעה לא תקינים`); return; }
+
+    const now = Date.now();
+    matches.push({
+      id: `ko_${stage}_${matches.length + 1}_${uid()}`,
+      stage,
+      date,
+      time: time || '',
+      startsAt,
+      homeTeam,
+      awayTeam,
+      hostCity: city || '',
+      status: 'open',
+      actualHomeScore: null,
+      actualAwayScore: null,
+      actualWinner: null,
+      advancingTeam: null,
+      createdAt: now,
+      updatedAt: now
+    });
+  });
+
+  if (matches.length === 0 && errors.length === 0) errors.push('לא נמצאו משחקי נוקאאוט בקובץ');
+  return {matches, errors};
+}
+
+function showKOMatchesPreview(matches) {
+  const prev = document.getElementById('koPreview');
+  if (!prev) return;
+  pendingKOMatchImport = matches;
+  prev.innerHTML = `
+    <div style="margin-top:16px">
+      <h3 style="font-size:15px;font-weight:700;margin-bottom:10px">תצוגה מקדימה — ${matches.length} משחקי נוקאאוט</h3>
+      <div class="preview-wrapper">
+        <table class="preview-table">
+          <thead><tr><th>שלב</th><th>תאריך</th><th>שעה</th><th>בית</th><th>חוץ</th><th>עיר</th></tr></thead>
+          <tbody>${matches.map(m => `<tr><td>${knockoutStageLabel(m.stage)}</td><td>${m.date}</td><td>${m.time}</td><td>${teamText(m.homeTeam)}</td><td>${teamText(m.awayTeam)}</td><td>${escapeHtml(m.hostCity)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="importKOMatches('replace')">ייבא והחלף נוקאאוט</button>
+        <button class="btn btn-secondary" onclick="importKOMatches('append')">הוסף לרשימה קיימת</button>
+        <button class="btn btn-secondary" onclick="clearKOMatchesPreview()">ביטול</button>
+      </div>
+    </div>`;
+}
+
+window.clearKOMatchesPreview = function() {
+  pendingKOMatchImport = [];
+  const prev = document.getElementById('koPreview');
+  if (prev) prev.innerHTML = '';
+};
+
+window.importKOMatches = async function(mode='replace') {
+  const incoming = pendingKOMatchImport;
+  if (!incoming.length) { showToast('אין משחקים לייבוא'); return; }
+  const existing = loadData('knockoutMatches', []);
+  const matches = mode === 'append' ? [...existing, ...incoming] : incoming;
+  saveData('knockoutMatches', matches);
+  pendingKOMatchImport = [];
+  await showStateSaveToast(`יובאו ${incoming.length} משחקי נוקאאוט`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutMatches']);
+  switchAdminPanel('knockout');
+};
 
 window.addKOMatch = async function() {
   const stage = document.getElementById('ko-stage')?.value;
