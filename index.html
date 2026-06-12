@@ -769,6 +769,7 @@ const USERS_API_URL = '/.netlify/functions/users';
 let userCloudSaveTimer = null;
 let userCloudSaveInProgress = false;
 let lastUsersCloudSyncOk = false;
+const USER_SCORE_FIELDS = ['totalScore','exactCount','outcomeCount','bonusScore'];
 
 function shouldUseCloudUsers() {
   return typeof fetch === 'function' && location.protocol !== 'file:';
@@ -825,6 +826,28 @@ function mergeUserLists(...lists) {
   return merged;
 }
 
+function mergeUserListsWithCloudScores(cloudUsers=[], localUsers=[]) {
+  const merged = mergeUserLists(cloudUsers, localUsers);
+  merged.forEach(user => {
+    const cloudUser = cloudUsers.find(cloud => sameUserIdentity(cloud, user));
+    if (!cloudUser) return;
+    USER_SCORE_FIELDS.forEach(field => {
+      user[field] = Number(cloudUser[field] || 0);
+    });
+  });
+  return merged;
+}
+
+function mergedUsersNeedCloudSave(cloudUsers=[], mergedUsers=[]) {
+  if (mergedUsers.length !== cloudUsers.length) return true;
+  return mergedUsers.some(user => {
+    const cloudUser = cloudUsers.find(cloud => sameUserIdentity(cloud, user));
+    if (!cloudUser) return true;
+    if (user.passwordHash && user.passwordHash !== cloudUser.passwordHash) return true;
+    return Number(user.passwordSetAt || 0) > Number(cloudUser.passwordSetAt || 0);
+  });
+}
+
 async function fetchUsersFromCloud() {
   if (!shouldUseCloudUsers()) return null;
   try {
@@ -879,9 +902,9 @@ async function syncUsersFromCloud() {
   const cloudUsers = await fetchUsersFromCloud();
   if (!cloudUsers) return false;
   const localUsers = loadData('users', []);
-  const merged = mergeUserLists(cloudUsers, localUsers);
+  const merged = mergeUserListsWithCloudScores(cloudUsers, localUsers);
   saveData('users', merged, {skipCloud:true});
-  if (merged.length !== cloudUsers.length) queueUsersCloudSave(merged);
+  if (mergedUsersNeedCloudSave(cloudUsers, merged)) queueUsersCloudSave(merged);
   return true;
 }
 
@@ -1822,21 +1845,20 @@ function bindLoginPage() {
       if (!email && !phone) { showLoginError('נא להזין אימייל או טלפון'); return; }
       if (email.includes('@') && !isValidEmail(email)) { showLoginError('נא להזין אימייל תקין'); return; }
       let users = loadData('users', []);
-      let user = findUserByLogin(users, loginValue);
       let syncOk = true;
-      if (!user && shouldUseCloudUsers()) {
+      if (shouldUseCloudUsers()) {
         const originalText = loginBtn.textContent;
         loginBtn.disabled = true;
         loginBtn.textContent = 'בודק...';
         try {
           syncOk = await syncUsersFromCloud();
           users = loadData('users', []);
-          user = findUserByLogin(users, loginValue);
         } finally {
           loginBtn.disabled = false;
           loginBtn.textContent = originalText;
         }
       }
+      let user = findUserByLogin(users, loginValue);
       if (!user && shouldUseCloudUsers() && !syncOk) {
         showLoginError('רשימת המשתמשים המרכזית לא זמינה כרגע. ודא שהאתר פורסם עם תיקיית netlify וה-functions, ואז נסה שוב.');
         return;
@@ -1875,8 +1897,10 @@ function bindLoginPage() {
       showLoginError('סיסמה שגויה');
       return;
     }
+    if (shouldUseCloudUsers()) await syncUsersFromCloud();
+    const refreshedUser = findUserByLogin(loadData('users', []), selectedLoginUser.email || selectedLoginUser.phone || emailInput.value) || selectedLoginUser;
     saveUsersToCloud(loadData('users', []));
-    await completeLogin(selectedLoginUser);
+    await completeLogin(refreshedUser);
   };
 
   emailInput.onkeydown = e => {

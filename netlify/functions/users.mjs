@@ -6,6 +6,7 @@ const headers = {
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   'Content-Type': 'application/json; charset=utf-8'
 };
+const scoreFields = ['totalScore', 'exactCount', 'outcomeCount', 'bonusScore'];
 
 function json(statusCode, body) {
   return {
@@ -98,6 +99,35 @@ function mergeUsers(users) {
   return merged;
 }
 
+function mergeUserRecord(existing, incoming, {preserveExistingScores=false}={}) {
+  const normalizedExisting = sanitizeUser(existing);
+  const normalizedIncoming = sanitizeUser(incoming);
+  const merged = sanitizeUser({...normalizedExisting, ...normalizedIncoming});
+  if (!normalizedIncoming.passwordHash && normalizedExisting.passwordHash) merged.passwordHash = normalizedExisting.passwordHash;
+  if (!normalizedIncoming.passwordSetAt && normalizedExisting.passwordSetAt) merged.passwordSetAt = normalizedExisting.passwordSetAt;
+  if (preserveExistingScores) {
+    scoreFields.forEach(field => {
+      merged[field] = Number(normalizedExisting[field] || 0);
+    });
+  }
+  return merged;
+}
+
+function mergeUsersPreservingExistingScores(existingUsers, incomingUsers) {
+  const merged = mergeUsers(existingUsers);
+  incomingUsers.forEach(user => {
+    const normalized = sanitizeUser(user);
+    if (!normalized.email && !normalized.phone) return;
+    const idx = merged.findIndex(existing => sameUser(existing, normalized));
+    if (idx === -1) {
+      merged.push(normalized);
+    } else {
+      merged[idx] = mergeUserRecord(merged[idx], normalized, {preserveExistingScores: true});
+    }
+  });
+  return merged;
+}
+
 export const handler = async event => {
   if (event.httpMethod === 'OPTIONS') return json(200, {ok: true});
 
@@ -114,7 +144,9 @@ export const handler = async event => {
       const payload = JSON.parse(event.body || '{}');
       const incomingUsers = Array.isArray(payload.users) ? payload.users : [];
       const existingUsers = payload.replace ? [] : (await store.get('users', {type: 'json'}));
-      const users = mergeUsers([...(Array.isArray(existingUsers) ? existingUsers : []), ...incomingUsers]);
+      const users = payload.replace
+        ? mergeUsers(incomingUsers)
+        : mergeUsersPreservingExistingScores(Array.isArray(existingUsers) ? existingUsers : [], incomingUsers);
       await store.setJSON('users', users);
       return json(200, {ok: true, count: users.length});
     }
