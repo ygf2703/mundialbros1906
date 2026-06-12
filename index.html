@@ -1511,8 +1511,215 @@ function getOutcome(home, away) {
   return 'draw';
 }
 
-function getLeaderboard() {
+function emptyScoreBucket() {
+  return {totalScore: 0, exactCount: 0, outcomeCount: 0, bonusScore: 0};
+}
+
+function scoreNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function sameScoreText(a, b) {
+  return normalizeDailyBonusValue(a) === normalizeDailyBonusValue(b);
+}
+
+function addScore(scoreMap, userId, amount, options={}) {
+  const score = Number(amount || 0);
+  if (!userId || !score) return;
+  if (!scoreMap.has(userId)) scoreMap.set(userId, emptyScoreBucket());
+  const bucket = scoreMap.get(userId);
+  bucket.totalScore += score;
+  if (options.bonus) bucket.bonusScore += score;
+  if (options.exact) bucket.exactCount += 1;
+  else if (options.outcome) bucket.outcomeCount += 1;
+}
+
+function matchScoreDetails(pred, match) {
+  if (!pred || !match) {
+    const fallback = Number(pred?.scoreAwarded || 0);
+    return {score: fallback, isExact: !!pred?.isExact, isOutcomeCorrect: !!pred?.isOutcomeCorrect};
+  }
+
+  const ah = scoreNumber(match.actualHomeScore);
+  const aa = scoreNumber(match.actualAwayScore);
+  const ph = scoreNumber(pred.predictedHomeScore);
+  const pa = scoreNumber(pred.predictedAwayScore);
+
+  if (ah === null || aa === null || ph === null || pa === null) {
+    const fallback = Number(pred.scoreAwarded || 0);
+    return {score: fallback, isExact: !!pred.isExact, isOutcomeCorrect: !!pred.isOutcomeCorrect};
+  }
+
+  const normalizedPred = {...pred, predictedHomeScore: ph, predictedAwayScore: pa};
+  const normalizedMatch = {
+    ...match,
+    actualHomeScore: ah,
+    actualAwayScore: aa,
+    status: (match.status === 'finished' || match.status === 'scored') ? match.status : 'finished'
+  };
+  const isExact = ph === ah && pa === aa;
+  const isOutcomeCorrect = getOutcome(ph, pa) === getOutcome(ah, aa);
+  return {
+    score: computeScoreForPrediction(normalizedPred, normalizedMatch),
+    isExact,
+    isOutcomeCorrect
+  };
+}
+
+function deriveUserScoreMap(source={}) {
+  const users = source.users || loadData('users', []);
+  const matches = source.matches || loadData('matches', []);
+  const koMatches = source.knockoutMatches || loadData('knockoutMatches', []);
+  const predictions = source.predictions || loadData('predictions', []);
+  const koPredictions = source.knockoutPredictions || loadData('knockoutPredictions', []);
+  const specials = source.specialPredictions || getSpecialPredictions();
+  const actualGroupWinners = source.actualGroupWinners || loadData('actualGroupWinners', {});
+  const actualTopScorer = source.actualTopScorer ?? loadData('actualTopScorer', '');
+  const actualChampion = source.actualChampion ?? loadData('actualChampion', '');
+  const dailyActuals = source.dailyBonusActuals || loadData('dailyBonusActuals', {});
+
+  const scores = new Map();
+  users.forEach(user => {
+    if (user?.id) scores.set(user.id, emptyScoreBucket());
+  });
+
+  const matchesById = new Map(matches.filter(m => m?.id).map(m => [m.id, m]));
+  predictions.forEach(pred => {
+    const details = matchScoreDetails(pred, matchesById.get(pred.matchId));
+    addScore(scores, pred.userId, details.score, {
+      exact: details.isExact,
+      outcome: details.isOutcomeCorrect && !details.isExact
+    });
+  });
+
+  const koMatchesById = new Map(koMatches.filter(m => m?.id).map(m => [m.id, m]));
+  koPredictions.forEach(pred => {
+    const details = matchScoreDetails(pred, koMatchesById.get(pred.matchId));
+    addScore(scores, pred.userId, details.score, {
+      exact: details.isExact,
+      outcome: details.isOutcomeCorrect && !details.isExact
+    });
+  });
+
+  Object.entries(specials || {}).forEach(([userId, pred]) => {
+    if (!pred) return;
+
+    Object.entries(actualGroupWinners || {}).forEach(([grp, winner]) => {
+      if (winner && sameScoreText(pred[`group_${grp}`], winner)) {
+        addScore(scores, userId, SCORING.groupWinner, {bonus: true});
+      }
+    });
+
+    if (actualTopScorer && sameScoreText(pred.topScorer, actualTopScorer)) {
+      addScore(scores, userId, SCORING.topScorer, {bonus: true});
+    }
+
+    if (actualChampion && sameScoreText(pred.tournament_winner, actualChampion)) {
+      addScore(scores, userId, SCORING.tournamentWinner, {bonus: true});
+    }
+
+    const dailyAnswers = plainObject(pred.dailyBonus);
+    DAILY_BONUS_QUESTIONS.forEach(question => {
+      const actual = getDailyBonusActualValue(question.id, dailyActuals);
+      if (actual && sameScoreText(dailyAnswers[question.id], actual)) {
+        addScore(scores, userId, dailyBonusQuestionPoints(question), {bonus: true});
+      }
+    });
+  });
+
+  const addKnockoutStageBonuses = (stage, keyPrefix) => {
+    koMatches
+      .filter(match => match.stage === stage && match.advancingTeam)
+      .sort((a,b) => Number(a.startsAt || 0) - Number(b.startsAt || 0))
+      .forEach((match, index) => {
+        const key = `${keyPrefix}${index + 1}_winner`;
+        Object.entries(specials || {}).forEach(([userId, pred]) => {
+          if (pred && sameScoreText(pred[key], match.advancingTeam)) {
+            addScore(scores, userId, SCORING.knockoutStageWinner, {bonus: true});
+          }
+        });
+      });
+  };
+  addKnockoutStageBonuses('round_of_16', 'r16');
+  addKnockoutStageBonuses('quarter_final', 'qf');
+  addKnockoutStageBonuses('semi_final', 'sf');
+
+  return scores;
+}
+
+function usersWithDerivedScores(users=loadData('users', []), source={}) {
+  const scores = deriveUserScoreMap({...source, users});
+  return users.map(user => ({
+    ...user,
+    ...(scores.get(user.id) || emptyScoreBucket())
+  }));
+}
+
+function rebuildScoreStateFromSavedData() {
   const users = loadData('users', []);
+  const matches = loadData('matches', []);
+  const knockoutMatches = loadData('knockoutMatches', []);
+  const matchMap = new Map(matches.filter(m => m?.id).map(m => [m.id, m]));
+  const koMatchMap = new Map(knockoutMatches.filter(m => m?.id).map(m => [m.id, m]));
+  const predictions = loadData('predictions', []).map(pred => {
+    const details = matchScoreDetails(pred, matchMap.get(pred.matchId));
+    return {
+      ...pred,
+      scoreAwarded: details.score,
+      isExact: details.isExact,
+      isOutcomeCorrect: details.isOutcomeCorrect,
+      scoredAt: details.score ? (pred.scoredAt || Date.now()) : null
+    };
+  });
+  const knockoutPredictions = loadData('knockoutPredictions', []).map(pred => {
+    const details = matchScoreDetails(pred, koMatchMap.get(pred.matchId));
+    return {
+      ...pred,
+      scoreAwarded: details.score,
+      isExact: details.isExact,
+      isOutcomeCorrect: details.isOutcomeCorrect,
+      scoredAt: details.score ? (pred.scoredAt || Date.now()) : null
+    };
+  });
+  const specialPredictions = getSpecialPredictions();
+  const dailyActuals = loadData('dailyBonusActuals', {});
+  Object.entries(specialPredictions).forEach(([userId, pred]) => {
+    if (!pred) return;
+    const answers = plainObject(pred.dailyBonus);
+    const scores = {...plainObject(pred.dailyBonusScores)};
+    DAILY_BONUS_QUESTIONS.forEach(question => {
+      const actual = getDailyBonusActualValue(question.id, dailyActuals);
+      if (!actual) {
+        delete scores[question.id];
+        return;
+      }
+      const answer = normalizeDailyBonusValue(answers[question.id]);
+      const earned = answer && answer === actual ? dailyBonusQuestionPoints(question) : 0;
+      scores[question.id] = {
+        points: earned,
+        correct: earned > 0,
+        answer,
+        actual,
+        scoredAt: Date.now()
+      };
+    });
+    if (Object.keys(scores).length) specialPredictions[userId].dailyBonusScores = scores;
+    else delete specialPredictions[userId].dailyBonusScores;
+  });
+  const derivedUsers = usersWithDerivedScores(users, {
+    matches,
+    knockoutMatches,
+    predictions,
+    knockoutPredictions,
+    specialPredictions
+  });
+  return {users: derivedUsers, predictions, knockoutPredictions, specialPredictions};
+}
+
+function getLeaderboard() {
+  const users = usersWithDerivedScores();
   return users
     .map(u => ({...u}))
     .sort((a,b) => {
@@ -1566,10 +1773,10 @@ function formatDate(dateStr) {
 
 function computeScoreForPrediction(pred, match) {
   if (match.status !== 'finished' && match.status !== 'scored') return 0;
-  if (match.actualHomeScore === null) return 0;
+  if (scoreNumber(match.actualHomeScore) === null || scoreNumber(match.actualAwayScore) === null) return 0;
   const isKnockout = match.stage !== 'group';
-  const ah = match.actualHomeScore, aa = match.actualAwayScore;
-  const ph = pred.predictedHomeScore, pa = pred.predictedAwayScore;
+  const ah = scoreNumber(match.actualHomeScore), aa = scoreNumber(match.actualAwayScore);
+  const ph = scoreNumber(pred.predictedHomeScore), pa = scoreNumber(pred.predictedAwayScore);
   if (ph === null || pa === null) return 0;
   
   let score = 0;
@@ -3266,6 +3473,7 @@ function bindAdminActionDelegates() {
       calcMatch: () => window.calcMatch(matchId),
       recalcMatch: () => window.recalcMatch(matchId),
       calcAllMatches: () => window.calcAllMatches(),
+      rebuildAllScores: () => window.rebuildAllScores(),
       resetResultsAndScores: () => window.resetResultsAndScores(),
       saveDailyBonusActual: () => window.saveDailyBonusActual(btn.dataset.questionId),
       scoreDailyBonus: () => window.scoreDailyBonusQuestion(btn.dataset.questionId),
@@ -3346,6 +3554,7 @@ function renderAdminResults() {
     <p style="font-size:13px;color:var(--text2);margin-bottom:10px">הזן תוצאות משחקים שהסתיימו וחשב ניקוד למשתמשים</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px;background:rgba(255,214,10,.18);border:1px solid rgba(216,154,0,.22);border-radius:var(--radius)">
       <button class="btn btn-primary btn-sm" type="button" data-admin-action="calcAllMatches">🔄 חשב ניקוד לכל המשחקים שהסתיימו</button>
+      <button class="btn btn-secondary btn-sm" type="button" data-admin-action="rebuildAllScores">שחזר ניקוד מהניחושים</button>
       <button class="btn btn-danger btn-sm" type="button" data-admin-action="resetResultsAndScores">אפס תוצאות וניקוד לסיום הבדיקה</button>
     </div>`;
   
@@ -3486,6 +3695,7 @@ window.calcMatch = async function(matchId) {
   let preds = loadData('predictions',[]);
   let users = loadData('users',[]);
   scoreGroupMatchRecord(m, preds, users);
+  users = usersWithDerivedScores(users, {matches, predictions: preds});
 
   saveData('matches', matches);
   saveData('predictions', preds);
@@ -3544,6 +3754,7 @@ window.calcAllMatches = async function() {
   ready.forEach(m => {
     if (scoreGroupMatchRecord(m, preds, users)) scored++;
   });
+  users = usersWithDerivedScores(users, {matches, predictions: preds});
   saveData('matches', matches);
   saveData('predictions', preds);
   saveData('users', users, {skipCloud:true});
@@ -3615,6 +3826,29 @@ window.resetResultsAndScores = async function() {
   const stateSaved = await saveAppStateToCloud(getLocalAppState(), {replace:true});
   const cloudSaved = await saveUsersToCloud(users, {replace:true});
   showToast((cloudSaved && stateSaved) || (!shouldUseCloudUsers() && !shouldUseCloudState()) ? 'תוצאות וניקוד אופסו' : 'תוצאות וניקוד אופסו בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע', cloudSaved && stateSaved ? 2400 : 4800);
+  switchAdminPanel('results');
+};
+
+window.rebuildAllScores = async function() {
+  const approved = await confirmAppAction({
+    title: 'שחזור ניקוד',
+    message: 'לבנות מחדש את הניקוד מכל התוצאות והניחושים השמורים? הניחושים עצמם לא יימחקו.',
+    confirmLabel: 'שחזר ניקוד'
+  });
+  if (!approved) return;
+
+  const rebuilt = rebuildScoreStateFromSavedData();
+  saveData('predictions', rebuilt.predictions, {skipCloud:true});
+  saveData('knockoutPredictions', rebuilt.knockoutPredictions, {skipCloud:true});
+  saveData('specialPredictions', rebuilt.specialPredictions, {skipCloud:true});
+  saveData('users', rebuilt.users, {skipCloud:true});
+
+  const stateSaved = await saveAppStateToCloud(getLocalAppState(['predictions','knockoutPredictions','specialPredictions']));
+  const usersSaved = await saveUsersToCloud(rebuilt.users, {replace:true});
+  const nonZero = rebuilt.users.filter(user => Number(user.totalScore || 0) > 0).length;
+  const total = rebuilt.users.reduce((sum, user) => sum + Number(user.totalScore || 0), 0);
+  const cloudOk = (stateSaved && usersSaved) || (!shouldUseCloudState() && !shouldUseCloudUsers());
+  showToast(cloudOk ? `הניקוד שוחזר: ${nonZero} משתתפים, ${total} נקודות` : 'הניקוד שוחזר בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע', cloudOk ? 3200 : 5200);
   switchAdminPanel('results');
 };
 
@@ -3898,6 +4132,7 @@ window.calcGroupBonuses = async function() {
     user.bonusScore = (user.bonusScore || 0) + bonus;
     user.totalScore = (user.totalScore || 0) + bonus;
   });
+  users = usersWithDerivedScores(users, {specialPredictions: specials, actualGroupWinners: winners});
   
   saveData('users', users, {skipCloud:true});
   await saveUsersToCloud(users, {replace:true});
@@ -4074,8 +4309,9 @@ window.scoreDailyBonusQuestion = async function(questionId) {
   if (!actualValue) { showToast('נא לבחור תשובת אמת לפני חישוב'); return; }
 
   const specials = getSpecialPredictions();
-  const users = loadData('users', []);
+  let users = loadData('users', []);
   const result = applyDailyBonusQuestionScore(question, actualValue, users, specials);
+  users = usersWithDerivedScores(users, {specialPredictions: specials, dailyBonusActuals: actuals});
   actuals[question.id].scoredAt = Date.now();
 
   saveData('dailyBonusActuals', actuals);
@@ -4095,7 +4331,7 @@ window.scoreAllDailyBonusQuestions = async function() {
   if (!readyQuestions.length) { showToast('אין תשובות אמת לחישוב'); return; }
 
   const specials = getSpecialPredictions();
-  const users = loadData('users', []);
+  let users = loadData('users', []);
   let correct = 0;
   let totalPoints = 0;
   readyQuestions.forEach(question => {
@@ -4106,6 +4342,7 @@ window.scoreAllDailyBonusQuestions = async function() {
     correct += result.correct;
     totalPoints += result.totalPoints;
   });
+  users = usersWithDerivedScores(users, {specialPredictions: specials, dailyBonusActuals: actuals});
 
   saveData('dailyBonusActuals', actuals);
   saveData('specialPredictions', specials);
@@ -4204,6 +4441,7 @@ window.calcTopScorerBonus = async function() {
       u.totalScore = (u.totalScore||0) + SCORING.topScorer;
     }
   });
+  users = usersWithDerivedScores(users, {specialPredictions: specials, actualTopScorer: actual});
   saveData('users', users, {skipCloud:true});
   await saveUsersToCloud(users, {replace:true});
   showToast(`✅ בונוסי מלך שערים חושבו! +${SCORING.topScorer} לכל מי שניחש נכון`);
@@ -4230,6 +4468,7 @@ window.calcChampionBonus = async function() {
       count++;
     }
   });
+  users = usersWithDerivedScores(users, {specialPredictions: specials, actualChampion: actual});
   saveData('users', users, {skipCloud:true});
   await saveUsersToCloud(users, {replace:true});
   showToast(`✅ בונוס אלופת העולם חושב! ${count} משתמשים ניחשו נכון`);
@@ -4254,6 +4493,7 @@ window.calcKnockoutStageBonus = async function(stage, keyPrefix, matchCount) {
       }
     });
   }
+  users = usersWithDerivedScores(users, {specialPredictions: specials});
   saveData('users', users, {skipCloud:true});
   await saveUsersToCloud(users, {replace:true});
   showToast(`✅ בונוסי ${stage} חושבו! ${total} ניחושים נכונים`);
@@ -4583,6 +4823,7 @@ window.calcKOMatch = async function(id) {
   kms[kmIdx].status='scored';
   kms[kmIdx].scoredAt=Date.now();
   kms[kmIdx].updatedAt=kms[kmIdx].scoredAt;
+  users = usersWithDerivedScores(users, {knockoutMatches: kms, knockoutPredictions: preds});
   saveData('knockoutMatches',kms);
   saveData('knockoutPredictions',preds);
   saveData('users',users,{skipCloud:true});
