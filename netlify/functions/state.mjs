@@ -19,6 +19,7 @@ const defaults = {
   dailyBonusActuals: {},
   specialsLocked: false
 };
+const LOCK_MINUTES = 30;
 
 function json(statusCode, body) {
   return {statusCode, headers, body: JSON.stringify(body)};
@@ -107,6 +108,14 @@ function latestTime(record) {
   );
 }
 
+function predictionEditTime(record) {
+  return Math.max(
+    Number(record?.updatedAt || 0),
+    Number(record?.submittedAt || 0),
+    Number(record?.createdAt || 0)
+  );
+}
+
 function mergeByKey(existing, incoming, keyFn) {
   const map = new Map();
   [...existing, ...incoming].forEach(item => {
@@ -115,6 +124,50 @@ function mergeByKey(existing, incoming, keyFn) {
     const previous = map.get(key);
     if (!previous || latestTime(item) >= latestTime(previous)) {
       map.set(key, {...previous, ...item});
+    }
+  });
+  return [...map.values()];
+}
+
+function predictionKey(pred) {
+  return pred?.userId && pred?.matchId ? `${pred.userId}:${pred.matchId}` : pred?.id;
+}
+
+function predictionPickChanged(base={}, incoming={}) {
+  const fields = ['predictedHomeScore','predictedAwayScore','predictedOutcome','predictedAdvancingTeam'];
+  return fields.some(field => (base?.[field] ?? null) !== (incoming?.[field] ?? null));
+}
+
+function matchLockTime(match) {
+  const startsAt = Number(match?.startsAt || 0);
+  if (!startsAt) return Infinity;
+  return startsAt - (LOCK_MINUTES * 60 * 1000);
+}
+
+function predictionIsBeforeMatchLock(pred, match) {
+  return predictionEditTime(pred) <= matchLockTime(match);
+}
+
+function mergePredictions(existing=[], incoming=[], matches=[]) {
+  const matchesById = new Map((matches || []).filter(m => m?.id).map(m => [m.id, m]));
+  const map = new Map();
+  [...existing, ...incoming].forEach(pred => {
+    const key = predictionKey(pred);
+    if (!key) return;
+    const previous = map.get(key);
+    const match = matchesById.get(pred.matchId);
+    const locked = match ? Date.now() >= matchLockTime(match) : false;
+
+    if (locked) {
+      if (!previous) {
+        if (predictionIsBeforeMatchLock(pred, match)) map.set(key, {...pred});
+        return;
+      }
+      if (predictionPickChanged(previous, pred) && !predictionIsBeforeMatchLock(pred, match)) return;
+    }
+
+    if (!previous || latestTime(pred) >= latestTime(previous)) {
+      map.set(key, {...previous, ...pred});
     }
   });
   return [...map.values()];
@@ -187,12 +240,14 @@ function mergeState(existingState, incomingState, replace=false) {
   const existing = sanitizeState(existingState || defaults);
   const incoming = sanitizeState(incomingState || {});
   if (replace) return incoming;
+  const matches = mergeMatches(existing.matches, incoming.matches);
+  const knockoutMatches = mergeMatches(existing.knockoutMatches, incoming.knockoutMatches);
   return {
-    predictions: mergeByKey(existing.predictions, incoming.predictions, p => p?.userId && p?.matchId ? `${p.userId}:${p.matchId}` : p?.id),
-    knockoutPredictions: mergeByKey(existing.knockoutPredictions, incoming.knockoutPredictions, p => p?.userId && p?.matchId ? `${p.userId}:${p.matchId}` : p?.id),
+    predictions: mergePredictions(existing.predictions, incoming.predictions, matches),
+    knockoutPredictions: mergePredictions(existing.knockoutPredictions, incoming.knockoutPredictions, knockoutMatches),
     specialPredictions: mergeSpecials(existing.specialPredictions, incoming.specialPredictions),
-    matches: mergeMatches(existing.matches, incoming.matches),
-    knockoutMatches: mergeMatches(existing.knockoutMatches, incoming.knockoutMatches),
+    matches,
+    knockoutMatches,
     actualGroupWinners: {...existing.actualGroupWinners, ...incoming.actualGroupWinners},
     actualTopScorer: incoming.actualTopScorer || existing.actualTopScorer,
     actualChampion: incoming.actualChampion || existing.actualChampion,

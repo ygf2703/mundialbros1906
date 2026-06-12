@@ -924,6 +924,14 @@ function latestRecordTime(record) {
   );
 }
 
+function predictionEditTime(record) {
+  return Math.max(
+    Number(record?.updatedAt || 0),
+    Number(record?.submittedAt || 0),
+    Number(record?.createdAt || 0)
+  );
+}
+
 function mergeRecordsByKey(existing, incoming, keyFn) {
   const map = new Map();
   [...(existing || []), ...(incoming || [])].forEach(item => {
@@ -932,6 +940,50 @@ function mergeRecordsByKey(existing, incoming, keyFn) {
     const previous = map.get(key);
     if (!previous || latestRecordTime(item) >= latestRecordTime(previous)) {
       map.set(key, {...previous, ...item});
+    }
+  });
+  return [...map.values()];
+}
+
+function predictionKey(pred) {
+  return pred?.userId && pred?.matchId ? `${pred.userId}:${pred.matchId}` : pred?.id;
+}
+
+function predictionPickChanged(base={}, incoming={}) {
+  const fields = ['predictedHomeScore','predictedAwayScore','predictedOutcome','predictedAdvancingTeam'];
+  return fields.some(field => (base?.[field] ?? null) !== (incoming?.[field] ?? null));
+}
+
+function matchLockTime(match) {
+  const startsAt = Number(match?.startsAt || 0);
+  if (!startsAt) return Infinity;
+  return startsAt - (SCORING.lockMinutes * 60 * 1000);
+}
+
+function predictionIsBeforeMatchLock(pred, match) {
+  return predictionEditTime(pred) <= matchLockTime(match);
+}
+
+function mergePredictionLists(existing=[], incoming=[], matches=[]) {
+  const matchesById = new Map((matches || []).filter(m => m?.id).map(m => [m.id, m]));
+  const map = new Map();
+  [...(existing || []), ...(incoming || [])].forEach(pred => {
+    const key = predictionKey(pred);
+    if (!key) return;
+    const previous = map.get(key);
+    const match = matchesById.get(pred.matchId);
+    const locked = match ? Date.now() >= matchLockTime(match) : false;
+
+    if (locked) {
+      if (!previous) {
+        if (predictionIsBeforeMatchLock(pred, match)) map.set(key, {...pred});
+        return;
+      }
+      if (predictionPickChanged(previous, pred) && !predictionIsBeforeMatchLock(pred, match)) return;
+    }
+
+    if (!previous || latestRecordTime(pred) >= latestRecordTime(previous)) {
+      map.set(key, {...previous, ...pred});
     }
   });
   return [...map.values()];
@@ -1045,12 +1097,14 @@ function mergeDailyBonusActuals(cloudActuals={}, localActuals={}) {
 }
 
 function mergeAppStates(cloudState={}, localState={}) {
+  const matches = mergeMatchLists(cloudState.matches, localState.matches);
+  const knockoutMatches = mergeMatchLists(cloudState.knockoutMatches, localState.knockoutMatches);
   return {
-    predictions: mergeRecordsByKey(cloudState.predictions, localState.predictions, p => p?.userId && p?.matchId ? `${p.userId}:${p.matchId}` : p?.id),
-    knockoutPredictions: mergeRecordsByKey(cloudState.knockoutPredictions, localState.knockoutPredictions, p => p?.userId && p?.matchId ? `${p.userId}:${p.matchId}` : p?.id),
+    predictions: mergePredictionLists(cloudState.predictions, localState.predictions, matches),
+    knockoutPredictions: mergePredictionLists(cloudState.knockoutPredictions, localState.knockoutPredictions, knockoutMatches),
     specialPredictions: mergeSpecialPredictionState(cloudState.specialPredictions, localState.specialPredictions),
-    matches: mergeMatchLists(cloudState.matches, localState.matches),
-    knockoutMatches: mergeMatchLists(cloudState.knockoutMatches, localState.knockoutMatches),
+    matches,
+    knockoutMatches,
     actualGroupWinners: {...(localState.actualGroupWinners || {}), ...(cloudState.actualGroupWinners || {})},
     actualTopScorer: cloudState.actualTopScorer || localState.actualTopScorer || '',
     actualChampion: cloudState.actualChampion || localState.actualChampion || '',
@@ -1367,8 +1421,34 @@ function panelMatchupHtml(homeTeam, awayTeam) {
 }
 
 function matchIsLocked(match) {
-  const lockMs = SCORING.lockMinutes * 60 * 1000;
-  return Date.now() >= (match.startsAt - lockMs);
+  return Date.now() >= matchLockTime(match);
+}
+
+function matchPredictionLockedMessage() {
+  return `ההימור למשחק הזה נעול. ניתן לשנות עד ${SCORING.lockMinutes} דקות לפני תחילת המשחק בלבד.`;
+}
+
+function refreshPredictionViewsIfClean() {
+  if (unsavedPredictionKeys.size !== 0) return;
+  const page = document.getElementById('page-' + currentPage);
+  const content = page?.querySelector('.content');
+  if (!content) return;
+  if (currentPage === 'predictions') {
+    content.innerHTML = renderPredictions();
+    bindPredictions();
+  } else if (currentPage === 'dashboard') {
+    content.innerHTML = renderDashboard();
+  }
+}
+
+function predictionCanBeChanged(match, unsavedKey='') {
+  if (!match || match.status !== 'open' || matchIsLocked(match)) {
+    if (unsavedKey) clearUnsavedPrediction(unsavedKey);
+    showToast(matchPredictionLockedMessage(), 4200);
+    refreshPredictionViewsIfClean();
+    return false;
+  }
+  return true;
 }
 
 function getOutcome(home, away) {
@@ -2383,15 +2463,14 @@ window.saveKOPrediction = async function(matchId) {
   const aEl = document.getElementById('ka_'+matchId);
   const advEl = document.getElementById('kadv_'+matchId);
   if (!hEl || !aEl) return;
+  const kms = loadData('knockoutMatches',[]);
+  const match = kms.find(m => m.id === matchId);
+  if (!predictionCanBeChanged(match, 'ko:' + matchId)) return;
+
   const hv = hEl.value.trim(), av = aEl.value.trim();
   if (hv === '' || av === '') { showToast('נא למלא את שני השדות'); return; }
   const h = parseInt(hv), a = parseInt(av);
   if (isNaN(h)||isNaN(a)||h<0||a<0) { showToast('נא להזין מספרים תקינים'); return; }
-  
-  const kms = loadData('knockoutMatches',[]);
-  const match = kms.find(m => m.id === matchId);
-  if (!match) return;
-  if (matchIsLocked(match)) { showToast('המשחק כבר נעול'); return; }
   
   let koPreds = loadData('knockoutPredictions',[]);
   const existing = koPreds.find(p => p.userId === currentUser.id && p.matchId === matchId);
@@ -2414,6 +2493,8 @@ window.saveKOPrediction = async function(matchId) {
 };
 
 window.autoSaveKOPred = function(matchId) {
+  const match = loadData('knockoutMatches',[]).find(m => m.id === matchId);
+  if (!predictionCanBeChanged(match, 'ko:' + matchId)) return;
   markUnsavedPrediction('ko:' + matchId);
 };
 
@@ -2421,16 +2502,15 @@ window.savePrediction = async function(matchId) {
   const hEl = document.getElementById('h_'+matchId);
   const aEl = document.getElementById('a_'+matchId);
   if (!hEl || !aEl) return;
+  const matches = loadData('matches',[]);
+  const match = matches.find(m => m.id === matchId);
+  if (!predictionCanBeChanged(match, 'match:' + matchId)) return;
+
   const hv = hEl.value.trim();
   const av = aEl.value.trim();
   if (hv === '' || av === '') { showToast('נא למלא את שני השדות'); return; }
   const h = parseInt(hv), a = parseInt(av);
   if (isNaN(h)||isNaN(a)||h<0||a<0) { showToast('נא להזין מספרים תקינים'); return; }
-  
-  const matches = loadData('matches',[]);
-  const match = matches.find(m => m.id === matchId);
-  if (!match) return;
-  if (matchIsLocked(match)) { showToast('המשחק כבר נעול'); return; }
   
   let preds = loadData('predictions',[]);
   const existing = preds.find(p => p.userId === currentUser.id && p.matchId === matchId);
@@ -2462,19 +2542,20 @@ window.savePrediction = async function(matchId) {
 };
 
 window.autoSavePred = function(matchId) {
+  const match = loadData('matches',[]).find(m => m.id === matchId);
+  if (!predictionCanBeChanged(match, 'match:' + matchId)) return;
   markUnsavedPrediction('match:' + matchId);
 };
 
 window.autoSaveDashboardPred = function(matchId) {
+  const match = loadData('matches',[]).find(m => m.id === matchId);
+  if (!predictionCanBeChanged(match, 'match:' + matchId)) return;
   markUnsavedPrediction('match:' + matchId);
 };
 
 window.saveDashboardPrediction = async function(matchId) {
   const match = loadData('matches', []).find(m => m.id === matchId);
-  if (!match || match.status !== 'open' || matchIsLocked(match)) {
-    showToast('המשחק נעול לניחושים');
-    return;
-  }
+  if (!predictionCanBeChanged(match, 'match:' + matchId)) return;
 
   const h = parseInt(document.getElementById('dash_h_'+matchId)?.value);
   const a = parseInt(document.getElementById('dash_a_'+matchId)?.value);
@@ -2485,11 +2566,13 @@ window.saveDashboardPrediction = async function(matchId) {
 
   let preds = loadData('predictions', []);
   const existing = preds.find(p => p.userId === currentUser.id && p.matchId === matchId);
+  const now = Date.now();
   if (existing) {
     existing.predictedHomeScore = h;
     existing.predictedAwayScore = a;
     existing.predictedOutcome = getOutcome(h,a);
-    existing.submittedAt = Date.now();
+    existing.submittedAt = now;
+    existing.updatedAt = now;
   } else {
     preds.push({
       id: uid(), userId: currentUser.id, matchId,
@@ -2497,7 +2580,7 @@ window.saveDashboardPrediction = async function(matchId) {
       predictedOutcome: getOutcome(h,a),
       predictedAdvancingTeam: null,
       scoreAwarded: 0, isExact: false, isOutcomeCorrect: false,
-      submittedAt: Date.now()
+      submittedAt: now, updatedAt: now
     });
   }
   saveData('predictions', preds);
