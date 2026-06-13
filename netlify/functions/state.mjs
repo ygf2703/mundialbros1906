@@ -215,15 +215,96 @@ function mergeSpecials(existing, incoming) {
   return normalizeSpecials(merged);
 }
 
+function hasSpecialValue(value) {
+  return value !== null && value !== undefined && value !== '';
+}
+
+function specialTimeKey(key) {
+  return key === 'topScorer' ? 'topScorerTime' : `${key}_time`;
+}
+
+function isSpecialTimeKey(key) {
+  return key === 'topScorerTime' || key.endsWith('_time');
+}
+
+function mergeTimedSpecialFields(base={}, next={}) {
+  const merged = {};
+  const ignored = new Set(['dailyBonus','dailyBonusTimes','dailyBonusScores']);
+  const keys = new Set([...Object.keys(base), ...Object.keys(next)]
+    .filter(key => !ignored.has(key) && !isSpecialTimeKey(key)));
+
+  keys.forEach(key => {
+    const timeKey = specialTimeKey(key);
+    const baseHas = hasSpecialValue(base[key]);
+    const nextHas = hasSpecialValue(next[key]);
+    if (!baseHas && !nextHas) return;
+
+    const baseTime = Number(base[timeKey] || 0);
+    const nextTime = Number(next[timeKey] || 0);
+    const useNext = nextHas && (!baseHas || nextTime >= baseTime);
+    const source = useNext ? next : base;
+    const selectedTime = Number(source[timeKey] || 0) || Math.max(baseTime, nextTime);
+    merged[key] = source[key];
+    if (selectedTime) merged[timeKey] = selectedTime;
+  });
+
+  return merged;
+}
+
+function mergeDailyBonusPredictions(base={}, next={}) {
+  const baseAnswers = objectOrEmpty(base.dailyBonus);
+  const nextAnswers = objectOrEmpty(next.dailyBonus);
+  const baseTimes = objectOrEmpty(base.dailyBonusTimes);
+  const nextTimes = objectOrEmpty(next.dailyBonusTimes);
+  const answers = {};
+  const times = {};
+
+  new Set([...Object.keys(baseAnswers), ...Object.keys(nextAnswers), ...Object.keys(baseTimes), ...Object.keys(nextTimes)]).forEach(questionId => {
+    const baseHas = hasSpecialValue(baseAnswers[questionId]);
+    const nextHas = hasSpecialValue(nextAnswers[questionId]);
+    if (!baseHas && !nextHas) return;
+
+    const baseTime = Number(baseTimes[questionId] || 0);
+    const nextTime = Number(nextTimes[questionId] || 0);
+    const useNext = nextHas && (!baseHas || nextTime >= baseTime);
+    answers[questionId] = useNext ? nextAnswers[questionId] : baseAnswers[questionId];
+    times[questionId] = (useNext ? nextTime : baseTime) || Math.max(baseTime, nextTime);
+  });
+
+  return {answers, times};
+}
+
+function mergeDailyBonusScores(base={}, next={}) {
+  const baseScores = objectOrEmpty(base.dailyBonusScores);
+  const nextScores = objectOrEmpty(next.dailyBonusScores);
+  const scores = {};
+  new Set([...Object.keys(baseScores), ...Object.keys(nextScores)]).forEach(questionId => {
+    const baseScore = baseScores[questionId];
+    const nextScore = nextScores[questionId];
+    if (nextScore === undefined) {
+      scores[questionId] = baseScore;
+      return;
+    }
+    if (baseScore === undefined) {
+      scores[questionId] = nextScore;
+      return;
+    }
+    const baseTime = latestTime(objectOrEmpty(baseScore));
+    const nextTime = latestTime(objectOrEmpty(nextScore));
+    scores[questionId] = nextTime >= baseTime ? nextScore : baseScore;
+  });
+  return scores;
+}
+
 function mergeSpecialRecord(existing={}, incoming={}) {
   const base = normalizeSpecialPredictionKeys(existing);
   const next = normalizeSpecialPredictionKeys(incoming);
-  const merged = {...base, ...next};
-  ['dailyBonus','dailyBonusTimes','dailyBonusScores'].forEach(key => {
-    const value = {...objectOrEmpty(base[key]), ...objectOrEmpty(next[key])};
-    if (Object.keys(value).length) merged[key] = value;
-    else delete merged[key];
-  });
+  const merged = mergeTimedSpecialFields(base, next);
+  const daily = mergeDailyBonusPredictions(base, next);
+  const scores = mergeDailyBonusScores(base, next);
+  if (Object.keys(daily.answers).length) merged.dailyBonus = daily.answers;
+  if (Object.keys(daily.times).length) merged.dailyBonusTimes = daily.times;
+  if (Object.keys(scores).length) merged.dailyBonusScores = scores;
   return normalizeSpecialPredictionKeys(merged);
 }
 
