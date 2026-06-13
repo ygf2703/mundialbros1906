@@ -259,6 +259,12 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 
 /* Score summary in result cards */
 .result-score{font-size:20px;font-weight:900;font-family:'Rubik',sans-serif;color:var(--blue)}
+.score-pair{display:inline-flex;align-items:center;justify-content:center;gap:4px;direction:rtl;unicode-bidi:isolate;font-family:'Rubik',sans-serif;font-weight:900}
+.score-pair-side{min-width:.75em;text-align:center}
+.score-pair-sep{color:var(--text2);font-weight:900}
+.score-pair.mini-score{font-size:12px;color:var(--text3);font-weight:700}
+.truth-result-line{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px;font-size:13px;color:var(--text2)}
+.truth-result-line .score-pair{font-size:15px;color:var(--blue)}
 
 /* Modal */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center}
@@ -1466,6 +1472,15 @@ function panelMatchupHtml(homeTeam, awayTeam) {
   return `${teamHtml(homeTeam)}<span class="panel-vs">נגד</span>${teamHtml(awayTeam)}`;
 }
 
+function scorePairHtml(homeScore, awayScore, className='') {
+  const home = scoreNumber(homeScore);
+  const away = scoreNumber(awayScore);
+  const homeText = home === null ? '-' : String(home);
+  const awayText = away === null ? '-' : String(away);
+  const extraClass = className ? ` ${escapeHtml(className)}` : '';
+  return `<span class="score-pair${extraClass}" dir="rtl" aria-label="${escapeHtml(homeText + ':' + awayText)}"><span class="score-pair-side score-pair-home">${escapeHtml(homeText)}</span><span class="score-pair-sep">:</span><span class="score-pair-side score-pair-away">${escapeHtml(awayText)}</span></span>`;
+}
+
 function matchIsLocked(match) {
   return Date.now() >= matchLockTime(match);
 }
@@ -2335,8 +2350,8 @@ function renderDashboard() {
           <div style="font-size:11px;color:var(--text3)">${formatDate(m.date)}</div>
         </div>
         <div style="text-align:left;display:flex;align-items:center;gap:8px">
-          ${pred?.predictedHomeScore !== null && pred?.predictedHomeScore !== undefined ? `<span style="font-size:12px;color:var(--text3)">${pred.predictedHomeScore}:${pred.predictedAwayScore}</span>` : ''}
-          <span class="result-score">${m.actualHomeScore}:${m.actualAwayScore}</span>
+          ${pred?.predictedHomeScore !== null && pred?.predictedHomeScore !== undefined ? scorePairHtml(pred.predictedHomeScore, pred.predictedAwayScore, 'mini-score') : ''}
+          <span class="result-score">${scorePairHtml(m.actualHomeScore, m.actualAwayScore)}</span>
           ${resultBadge}
         </div>
       </div>`;
@@ -2643,7 +2658,7 @@ function renderKnockoutSlot(stage, match, index) {
 
   const result = knockoutMatchResultText(match);
   const statusText = result ? 'תוצאה עודכנה' : 'טרם שוחק';
-  const scoreText = result || 'נגד';
+  const scoreHtml = result ? scorePairHtml(match.actualHomeScore, match.actualAwayScore) : 'נגד';
   const dateText = [match.date ? formatDate(match.date) : '', match.time || '', match.hostCity || ''].filter(Boolean).join(' • ');
   const advancingHtml = match.advancingTeam
     ? `<div class="knockout-meta"><span>עולה:</span><strong>${teamText(match.advancingTeam)}</strong></div>`
@@ -2658,7 +2673,7 @@ function renderKnockoutSlot(stage, match, index) {
       <div>
         <div class="knockout-team-line">
           <span>${teamHtml(match.homeTeam || 'ייקבע בהמשך')}</span>
-          <span class="knockout-score">${escapeHtml(scoreText)}</span>
+          <span class="knockout-score">${scoreHtml}</span>
         </div>
         <div class="knockout-team-line" style="margin-top:7px">
           <span>${teamHtml(match.awayTeam || 'ייקבע בהמשך')}</span>
@@ -2794,8 +2809,8 @@ function renderPredictions() {
                 placeholder="0" oninput="autoSavePred('${m.id}')" onchange="autoSavePred('${m.id}')">
             </div>
             ${m.actualHomeScore !== null ? `
-            <div style="text-align:center;margin-top:8px;font-size:13px;color:var(--text2)">
-              תוצאה: <strong>${m.actualHomeScore}:${m.actualAwayScore}</strong>
+            <div class="truth-result-line">
+              <span>תוצאה:</span> <strong>${scorePairHtml(m.actualHomeScore, m.actualAwayScore)}</strong>
               ${resultBadge}
             </div>` : ''}
             <div class="match-footer">
