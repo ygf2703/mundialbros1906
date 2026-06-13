@@ -20,6 +20,7 @@ const defaults = {
   specialsLocked: false
 };
 const LOCK_MINUTES = 30;
+const MATCH_TIMEZONE_OFFSET_MINUTES = 180; // Israel daylight time during the tournament.
 
 function json(statusCode, body) {
   return {statusCode, headers, body: JSON.stringify(body)};
@@ -138,9 +139,31 @@ function predictionPickChanged(base={}, incoming={}) {
   return fields.some(field => (base?.[field] ?? null) !== (incoming?.[field] ?? null));
 }
 
+function parseMatchStartFromFields(match) {
+  if (!match?.date || !match?.time) return null;
+  const dateMatch = String(match.date).match(/(\d{1,2})\D+(\d{1,2})/);
+  const timeMatch = String(match.time).match(/(\d{1,2}):(\d{1,2})/);
+  if (!dateMatch || !timeMatch) return null;
+  const day = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  if (![day, month, hour, minute].every(Number.isFinite)) return null;
+  const ts = Date.UTC(2026, month - 1, day, hour, minute) - (MATCH_TIMEZONE_OFFSET_MINUTES * 60 * 1000);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function getMatchStartTimestamp(match) {
+  const raw = Number(match?.startsAt);
+  if (raw === Infinity) return Infinity;
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  return parseMatchStartFromFields(match);
+}
+
 function matchLockTime(match) {
-  const startsAt = Number(match?.startsAt || 0);
-  if (!startsAt) return Infinity;
+  const startsAt = getMatchStartTimestamp(match);
+  if (startsAt === Infinity) return Infinity;
+  if (!startsAt) return -Infinity;
   return startsAt - (LOCK_MINUTES * 60 * 1000);
 }
 

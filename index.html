@@ -1006,9 +1006,31 @@ function predictionPickChanged(base={}, incoming={}) {
   return fields.some(field => (base?.[field] ?? null) !== (incoming?.[field] ?? null));
 }
 
+function parseMatchStartFromFields(match) {
+  if (!match?.date || !match?.time) return null;
+  const dateMatch = String(match.date).match(/(\d{1,2})\D+(\d{1,2})/);
+  const timeMatch = String(match.time).match(/(\d{1,2}):(\d{1,2})/);
+  if (!dateMatch || !timeMatch) return null;
+  const day = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  if (![day, month, hour, minute].every(Number.isFinite)) return null;
+  const ts = Date.UTC(2026, month - 1, day, hour, minute) - (MATCH_TIMEZONE_OFFSET_MINUTES * 60 * 1000);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function getMatchStartTimestamp(match) {
+  const raw = Number(match?.startsAt);
+  if (raw === Infinity) return Infinity;
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  return parseMatchStartFromFields(match);
+}
+
 function matchLockTime(match) {
-  const startsAt = Number(match?.startsAt || 0);
-  if (!startsAt) return Infinity;
+  const startsAt = getMatchStartTimestamp(match);
+  if (startsAt === Infinity) return Infinity;
+  if (!startsAt) return -Infinity;
   return startsAt - (SCORING.lockMinutes * 60 * 1000);
 }
 
@@ -1601,6 +1623,38 @@ function predictionCanBeChanged(match, unsavedKey='') {
   return true;
 }
 
+async function getFreshEditableMatch(matchId, collectionKey='matches', unsavedKey='') {
+  const currentMatch = loadData(collectionKey, []).find(m => m.id === matchId);
+  if (!predictionCanBeChanged(currentMatch, unsavedKey)) return null;
+  if (shouldUseCloudState()) await syncAppStateFromCloud();
+  const freshMatch = loadData(collectionKey, []).find(m => m.id === matchId);
+  if (!predictionCanBeChanged(freshMatch, unsavedKey)) return null;
+  return freshMatch;
+}
+
+function predictionMatchesExpected(pred, expected={}) {
+  if (!pred) return false;
+  if (scoreNumber(pred.predictedHomeScore) !== Number(expected.predictedHomeScore)) return false;
+  if (scoreNumber(pred.predictedAwayScore) !== Number(expected.predictedAwayScore)) return false;
+  if ('predictedAdvancingTeam' in expected && (pred.predictedAdvancingTeam || null) !== (expected.predictedAdvancingTeam || null)) return false;
+  return true;
+}
+
+async function savePredictionStateAndVerify({storageKey, matchId, expected, successMessage, fallbackMessage, unsavedKey}) {
+  const stateSaved = await saveAppStateToCloud(getLocalAppState([storageKey]));
+  const persisted = loadData(storageKey, []).find(p => p.userId === currentUser.id && p.matchId === matchId);
+  if (stateSaved && !predictionMatchesExpected(persisted, expected)) {
+    if (unsavedKey) clearUnsavedPrediction(unsavedKey);
+    showToast(matchPredictionLockedMessage(), 4600);
+    refreshPredictionViewsIfClean();
+    return false;
+  }
+
+  const cloudOk = stateSaved || !shouldUseCloudState();
+  showToast(cloudOk ? successMessage : fallbackMessage, cloudOk ? 2400 : 4800);
+  return cloudOk;
+}
+
 function getOutcome(home, away) {
   if (home > away) return 'home';
   if (away > home) return 'away';
@@ -1911,6 +1965,7 @@ let pendingKOMatchImport = [];
 const USER_PAGES = ['dashboard','predictions','knockout','special','leaderboard','rules'];
 const UNSAVED_PREDICTIONS_MESSAGE = 'בוצעו הימורים שלא נשמרו, שמור לפני יציאה';
 const unsavedPredictionKeys = new Set();
+const MATCH_TIMEZONE_OFFSET_MINUTES = 180; // Israel daylight time during the tournament.
 
 function saveCurrentSession(page=currentPage) {
   if (!currentUser?.id || isAdmin) return;
@@ -2913,9 +2968,8 @@ window.saveKOPrediction = async function(matchId) {
   const aEl = document.getElementById('ka_'+matchId);
   const advEl = document.getElementById('kadv_'+matchId);
   if (!hEl || !aEl) return;
-  const kms = loadData('knockoutMatches',[]);
-  const match = kms.find(m => m.id === matchId);
-  if (!predictionCanBeChanged(match, 'ko:' + matchId)) return;
+  const match = await getFreshEditableMatch(matchId, 'knockoutMatches', 'ko:' + matchId);
+  if (!match) return;
 
   const hv = hEl.value.trim(), av = aEl.value.trim();
   if (hv === '' || av === '') { showToast('נא למלא את שני השדות'); return; }
@@ -2939,7 +2993,14 @@ window.saveKOPrediction = async function(matchId) {
   }
   saveData('knockoutPredictions', koPreds);
   clearUnsavedPrediction('ko:' + matchId);
-  await showStateSaveToast('✅ ניחוש נוקאאוט נשמר!', '✅ ניחוש נוקאאוט נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutPredictions']);
+  await savePredictionStateAndVerify({
+    storageKey: 'knockoutPredictions',
+    matchId,
+    expected: {predictedHomeScore: h, predictedAwayScore: a, predictedAdvancingTeam: adv},
+    successMessage: '✅ ניחוש נוקאאוט נשמר!',
+    fallbackMessage: '✅ ניחוש נוקאאוט נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע',
+    unsavedKey: 'ko:' + matchId
+  });
 };
 
 window.autoSaveKOPred = function(matchId) {
@@ -2952,9 +3013,8 @@ window.savePrediction = async function(matchId) {
   const hEl = document.getElementById('h_'+matchId);
   const aEl = document.getElementById('a_'+matchId);
   if (!hEl || !aEl) return;
-  const matches = loadData('matches',[]);
-  const match = matches.find(m => m.id === matchId);
-  if (!predictionCanBeChanged(match, 'match:' + matchId)) return;
+  const match = await getFreshEditableMatch(matchId, 'matches', 'match:' + matchId);
+  if (!match) return;
 
   const hv = hEl.value.trim();
   const av = aEl.value.trim();
@@ -2983,7 +3043,14 @@ window.savePrediction = async function(matchId) {
   }
   saveData('predictions', preds);
   clearUnsavedPrediction('match:' + matchId);
-  await showStateSaveToast('✅ ניחוש נשמר!', '✅ ניחוש נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['predictions']);
+  await savePredictionStateAndVerify({
+    storageKey: 'predictions',
+    matchId,
+    expected: {predictedHomeScore: h, predictedAwayScore: a},
+    successMessage: '✅ ניחוש נשמר!',
+    fallbackMessage: '✅ ניחוש נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע',
+    unsavedKey: 'match:' + matchId
+  });
   refreshPredictionViewsIfClean();
 };
 
@@ -3000,8 +3067,8 @@ window.autoSaveDashboardPred = function(matchId) {
 };
 
 window.saveDashboardPrediction = async function(matchId) {
-  const match = loadData('matches', []).find(m => m.id === matchId);
-  if (!predictionCanBeChanged(match, 'match:' + matchId)) return;
+  const match = await getFreshEditableMatch(matchId, 'matches', 'match:' + matchId);
+  if (!match) return;
 
   const h = parseInt(document.getElementById('dash_h_'+matchId)?.value);
   const a = parseInt(document.getElementById('dash_a_'+matchId)?.value);
@@ -3031,7 +3098,14 @@ window.saveDashboardPrediction = async function(matchId) {
   }
   saveData('predictions', preds);
   clearUnsavedPrediction('match:' + matchId);
-  await showStateSaveToast('הניחוש נשמר', 'הניחוש נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['predictions']);
+  await savePredictionStateAndVerify({
+    storageKey: 'predictions',
+    matchId,
+    expected: {predictedHomeScore: h, predictedAwayScore: a},
+    successMessage: 'הניחוש נשמר',
+    fallbackMessage: 'הניחוש נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע',
+    unsavedKey: 'match:' + matchId
+  });
   refreshPredictionViewsIfClean();
 };
 
