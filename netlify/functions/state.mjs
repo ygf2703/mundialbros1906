@@ -22,6 +22,16 @@ const defaults = {
 const LOCK_MINUTES = 30;
 const MATCH_TIMEZONE_OFFSET_MINUTES = 180; // Israel daylight time during the tournament.
 
+const NOAM_ARGENTINA_FIX = {
+  email: 'noamfrostig@gmail.com',
+  homeTeam: 'ארגנטינה',
+  awayTeam: 'אלג׳יריה',
+  fallbackAwayTeam: 'אלג\'יריה',
+  matchId: 'match_19',
+  predictedHomeScore: 2,
+  predictedAwayScore: 0
+};
+
 function json(statusCode, body) {
   return {statusCode, headers, body: JSON.stringify(body)};
 }
@@ -31,6 +41,10 @@ function cleanText(value) {
     .toString()
     .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
     .trim();
+}
+
+function normalizeEmail(value) {
+  return cleanText(value).replace(/\s+/g, '').toLowerCase();
 }
 
 function objectOrEmpty(value) {
@@ -360,24 +374,84 @@ function mergeState(existingState, incomingState, replace=false) {
   };
 }
 
+function scoreOutcome(home, away) {
+  if (home > away) return 'home';
+  if (away > home) return 'away';
+  return 'draw';
+}
+
+function sameTeamName(a, b) {
+  return cleanText(a).replace(/׳/g, "'") === cleanText(b).replace(/׳/g, "'");
+}
+
+async function applyNoamArgentinaPredictionFix(state, userStore) {
+  const safeState = sanitizeState(state || defaults);
+  const users = await userStore.get('users', {type: 'json'});
+  const user = Array.isArray(users)
+    ? users.find(u => normalizeEmail(u?.email) === NOAM_ARGENTINA_FIX.email)
+    : null;
+  if (!user?.id) return {state: safeState, changed: false, reason: 'user_not_found'};
+
+  const match = safeState.matches.find(m => m?.id === NOAM_ARGENTINA_FIX.matchId)
+    || safeState.matches.find(m => sameTeamName(m?.homeTeam, NOAM_ARGENTINA_FIX.homeTeam)
+      && (sameTeamName(m?.awayTeam, NOAM_ARGENTINA_FIX.awayTeam) || sameTeamName(m?.awayTeam, NOAM_ARGENTINA_FIX.fallbackAwayTeam)));
+  if (!match?.id) return {state: safeState, changed: false, reason: 'match_not_found'};
+
+  const fixedSubmittedAt = Math.max(1, matchLockTime(match) - 60 * 1000);
+  const existing = safeState.predictions.find(p => p?.userId === user.id && p?.matchId === match.id);
+  const patch = {
+    id: existing?.id || `manual_noam_${match.id}`,
+    userId: user.id,
+    matchId: match.id,
+    predictedHomeScore: NOAM_ARGENTINA_FIX.predictedHomeScore,
+    predictedAwayScore: NOAM_ARGENTINA_FIX.predictedAwayScore,
+    predictedOutcome: scoreOutcome(NOAM_ARGENTINA_FIX.predictedHomeScore, NOAM_ARGENTINA_FIX.predictedAwayScore),
+    predictedAdvancingTeam: existing?.predictedAdvancingTeam || null,
+    scoreAwarded: existing?.scoreAwarded || 0,
+    isExact: !!existing?.isExact,
+    isOutcomeCorrect: !!existing?.isOutcomeCorrect,
+    submittedAt: fixedSubmittedAt,
+    updatedAt: fixedSubmittedAt,
+    lockedAt: existing?.lockedAt || null,
+    manualFix: 'noam_argentina_2026_06_17'
+  };
+
+  if (existing
+    && existing.predictedHomeScore === patch.predictedHomeScore
+    && existing.predictedAwayScore === patch.predictedAwayScore
+    && existing.predictedOutcome === patch.predictedOutcome) {
+    return {state: safeState, changed: false, reason: 'already_set'};
+  }
+
+  safeState.predictions = existing
+    ? safeState.predictions.map(pred => pred === existing ? {...existing, ...patch} : pred)
+    : [...safeState.predictions, patch];
+
+  return {state: safeState, changed: true, reason: 'applied'};
+}
+
 export const handler = async event => {
   if (event.httpMethod === 'OPTIONS') return json(200, {ok: true});
 
   try {
     connectLambda(event);
     const store = getStore('mundial-state');
+    const userStore = getStore('mundial-users');
 
     if (event.httpMethod === 'GET') {
       const state = await store.get('state', {type: 'json'});
-      return json(200, {state: sanitizeState(state || defaults)});
+      const fixed = await applyNoamArgentinaPredictionFix(state || defaults, userStore);
+      if (fixed.changed) await store.setJSON('state', fixed.state);
+      return json(200, {state: fixed.state, manualFix: fixed.reason});
     }
 
     if (event.httpMethod === 'POST') {
       const payload = JSON.parse(event.body || '{}');
       const existing = payload.replace ? defaults : (await store.get('state', {type: 'json'}));
       const state = mergeState(existing, payload.state, !!payload.replace);
-      await store.setJSON('state', state);
-      return json(200, {ok: true, state});
+      const fixed = await applyNoamArgentinaPredictionFix(state, userStore);
+      await store.setJSON('state', fixed.state);
+      return json(200, {ok: true, state: fixed.state, manualFix: fixed.reason});
     }
 
     return json(405, {error: 'Method not allowed'});
