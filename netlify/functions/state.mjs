@@ -222,7 +222,7 @@ function hasResult(match) {
 
 function mergeMatch(base, incoming) {
   const merged = {...base, ...incoming};
-  if (hasResult(base) && !hasResult(incoming)) {
+  if (hasResult(base) && !hasResult(incoming) && latestTime(base) >= latestTime(incoming)) {
     ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','winnerId','scoredAt','status'].forEach(key => {
       merged[key] = base[key];
     });
