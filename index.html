@@ -324,8 +324,34 @@ input,select,textarea{font-family:'Heebo',sans-serif}
 .knockout-meta{font-size:11px;color:var(--text3);font-weight:700;display:flex;gap:8px;flex-wrap:wrap}
 .knockout-readonly{display:inline-flex;align-items:center;border-radius:20px;background:var(--yellow-pale);border:1px solid var(--yellow);color:var(--blue);padding:4px 10px;font-size:11px;font-weight:800}
 .knockout-extra{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.ko-bracket-scroll{overflow-x:auto;overflow-y:hidden;padding:4px 0 12px;-webkit-overflow-scrolling:touch;scrollbar-color:var(--yellow) rgba(13,36,81,.14)}
+.ko-bracket-board{direction:ltr;min-width:1480px;display:grid;grid-template-columns:repeat(4,minmax(140px,1fr)) minmax(190px,1.25fr) repeat(4,minmax(140px,1fr));gap:10px;align-items:stretch;padding:6px 2px 10px}
+.ko-bracket-round{direction:rtl;min-width:0;display:flex;flex-direction:column}
+.ko-bracket-round-title{height:34px;display:flex;align-items:center;justify-content:center;background:var(--blue);color:var(--yellow);border-bottom:2px solid var(--yellow);border-radius:6px;padding:6px;font-size:11px;font-weight:900;text-align:center}
+.ko-bracket-round-matches{min-height:900px;flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:8px;padding-block:6px}
+.ko-bracket-match{direction:rtl;position:relative;background:rgba(255,255,255,.96);border:1px solid rgba(197,213,240,.95);border-radius:6px;box-shadow:0 2px 9px rgba(13,36,81,.13);padding:7px;min-height:82px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.ko-bracket-match::after{content:"";position:absolute;top:50%;width:11px;border-top:2px solid rgba(245,197,24,.82)}
+.ko-bracket-round[data-side="left"] .ko-bracket-match::after{left:100%}
+.ko-bracket-round[data-side="right"] .ko-bracket-match::after{right:100%}
+.ko-bracket-match[data-side="center"]::after{display:none}
+.ko-bracket-match-meta{display:flex;align-items:center;justify-content:space-between;gap:5px;color:var(--text3);font-size:9px;font-weight:700;line-height:1.15}
+.ko-bracket-team{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;border-radius:4px;padding:3px 4px;color:var(--blue);font-size:11px;font-weight:800}
+.ko-bracket-team.winner{background:var(--yellow-pale);box-shadow:inset 3px 0 0 var(--yellow-dark)}
+.ko-bracket-team .team-label{min-width:0;justify-content:flex-start;gap:4px}
+.ko-bracket-team .team-label-name{max-width:104px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ko-bracket-team .country-flag-img{width:19px;height:14px}
+.ko-bracket-team-score{font-family:'Rubik',sans-serif;font-size:13px;font-weight:900;min-width:12px;text-align:center;flex:0 0 auto}
+.ko-bracket-placeholder{color:var(--text3);font-size:10px;font-weight:700;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ko-bracket-center{direction:rtl;display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:14px;padding-top:34px;min-width:0}
+.ko-bracket-center .ko-bracket-match{min-height:104px;border:2px solid var(--yellow);box-shadow:0 5px 20px rgba(13,36,81,.2)}
+.ko-champion{background:var(--blue);color:white;border:2px solid var(--yellow);border-radius:8px;padding:14px 10px;text-align:center;box-shadow:0 6px 24px rgba(13,36,81,.24);min-height:126px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.ko-champion-trophy{font-size:30px;line-height:1}
+.ko-champion-label{font-size:10px;font-weight:800;color:var(--yellow)}
+.ko-champion-team{font-size:13px;font-weight:900;min-width:0;max-width:100%}
+.ko-champion-team .team-label{justify-content:center}
+#page-knockout .content{max-width:1600px}
 @media(max-width:900px){.knockout-kpis{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:760px){.rules-grid{grid-template-columns:1fr}.bottom-nav .nav-item{font-size:8px;padding-inline:1px}.nav-item svg{width:20px;height:20px}.knockout-hero h2{font-size:22px}.knockout-kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.rules-grid{grid-template-columns:1fr}.bottom-nav .nav-item{font-size:8px;padding-inline:1px}.nav-item svg{width:20px;height:20px}.knockout-hero h2{font-size:22px}.knockout-kpis{grid-template-columns:1fr 1fr}.ko-bracket-scroll{margin-inline:-16px;padding-inline:16px}.ko-bracket-board{min-width:1380px}.ko-bracket-round-matches{min-height:860px}}
 
 /* Responsive */
 @media(min-width:640px){
@@ -1068,6 +1094,7 @@ function matchHasResult(match) {
     || match?.actualAwayScore !== null && match?.actualAwayScore !== undefined
     || !!match?.actualWinner
     || !!match?.advancingTeam
+    || !!match?.winnerId
     || match?.status === 'finished'
     || match?.status === 'scored';
 }
@@ -1075,13 +1102,18 @@ function matchHasResult(match) {
 function mergeMatchState(base, incoming) {
   const merged = {...base, ...incoming};
   if (matchHasResult(base) && !matchHasResult(incoming)) {
-    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','scoredAt','status'].forEach(key => {
+    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','winnerId','scoredAt','status'].forEach(key => {
       merged[key] = base[key];
     });
   }
   if (matchHasResult(base) && matchHasResult(incoming) && latestRecordTime(base) >= latestRecordTime(incoming)) {
-    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','scoredAt','status'].forEach(key => {
+    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','winnerId','scoredAt','status'].forEach(key => {
       merged[key] = base[key];
+    });
+  }
+  if (latestRecordTime(base) >= latestRecordTime(incoming)) {
+    ['homeTeam','awayTeam','homeTeamSource','awayTeamSource','homeSourceMatchId','awaySourceMatchId','bracketPosition','isPlaceholder'].forEach(key => {
+      if (key in base) merged[key] = base[key];
     });
   }
   return merged;
@@ -2539,7 +2571,7 @@ function renderDashboard() {
   const dashboardActionsHtml = `
     <div class="dashboard-actions">
       <button class="dashboard-action" onclick="navTo('predictions')"><strong>${missing}</strong><span>ניחושים חסרים</span></button>
-      <button class="dashboard-action" onclick="navTo('knockout')"><strong>8</strong><span>נוקאאוט</span></button>
+      <button class="dashboard-action" onclick="navTo('knockout')"><strong>32</strong><span>נוקאאוט</span></button>
       <button class="dashboard-action" onclick="navTo('special')"><strong>★</strong><span>בונוסים</span></button>
       <button class="dashboard-action" onclick="navTo('leaderboard')"><strong>${rank}</strong><span>המקום שלך</span></button>
       <button class="dashboard-action" onclick="navTo('rules')"><strong>?</strong><span>איך משחקים</span></button>
@@ -2730,15 +2762,16 @@ function renderRulesPage() {
 // KNOCKOUT PAGE
 // ============================================================
 const KNOCKOUT_STAGE_LABELS = {
-  round_of_32: '32 האחרונות',
+  round_of_32: '32 הגדולות',
   round_of_16: 'שמינית גמר',
   quarter_final: 'רבע גמר',
   semi_final: 'חצי גמר',
   third_place: 'מקום שלישי',
   final: 'גמר'
 };
-const KNOCKOUT_MAIN_STAGES = ['round_of_16','quarter_final','semi_final','final'];
-const KNOCKOUT_STAGE_SLOTS = {round_of_16: 8, quarter_final: 4, semi_final: 2, final: 1};
+const KNOCKOUT_MAIN_STAGES = ['round_of_32','round_of_16','quarter_final','semi_final','final'];
+const KNOCKOUT_STAGE_SLOTS = {round_of_32: 16, round_of_16: 8, quarter_final: 4, semi_final: 2, final: 1};
+const KNOCKOUT_NEXT_STAGE = {round_of_32:'round_of_16', round_of_16:'quarter_final', quarter_final:'semi_final', semi_final:'final'};
 
 function knockoutStageLabel(stage) {
   return KNOCKOUT_STAGE_LABELS[stage] || stage || 'נוקאאוט';
@@ -2749,12 +2782,13 @@ function normalizeKnockoutStage(value) {
   const slug = raw.toLowerCase().replace(/[-\s]+/g, '_');
   const words = raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (KNOCKOUT_STAGE_LABELS[slug]) return slug;
+  if (slug === 'r32' || words.includes('32') || words.includes('שלושים ושתיים')) return 'round_of_32';
   if (slug === 'r16' || words.includes('שמינית') || words === '16') return 'round_of_16';
   if (slug === 'qf' || words.includes('רבע') || words === '8') return 'quarter_final';
   if (slug === 'sf' || words.includes('חצי') || words === '4') return 'semi_final';
   if (slug === 'third_place' || words.includes('שלישי')) return 'third_place';
   if (slug === 'final' || (words.includes('גמר') && !words.includes('חצי') && !words.includes('רבע') && !words.includes('שמינית'))) return 'final';
-  return slug || 'round_of_16';
+  return slug || 'round_of_32';
 }
 
 function knockoutStageOrder(stage) {
@@ -2767,8 +2801,162 @@ function sortedKnockoutMatches(matches) {
   return [...(matches || [])].sort((a,b) => {
     const stageDiff = knockoutStageOrder(a.stage) - knockoutStageOrder(b.stage);
     if (stageDiff) return stageDiff;
+    const positionDiff = Number(a.bracketPosition ?? 999) - Number(b.bracketPosition ?? 999);
+    if (positionDiff) return positionDiff;
     return Number(a.startsAt || 0) - Number(b.startsAt || 0);
   });
+}
+
+function createKnockoutPlaceholderMatch(stage, bracketPosition) {
+  return {
+    id: `ko_${stage}_${bracketPosition + 1}`,
+    stage,
+    bracketPosition,
+    date: '',
+    time: '',
+    startsAt: 0,
+    homeTeam: '',
+    awayTeam: '',
+    hostCity: '',
+    status: 'open',
+    actualHomeScore: null,
+    actualAwayScore: null,
+    actualWinner: null,
+    advancingTeam: null,
+    winnerId: null,
+    isPlaceholder: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+}
+
+function placeKnockoutStageMatches(matches, stage, createMissing=false) {
+  const slotCount = KNOCKOUT_STAGE_SLOTS[stage] || 0;
+  const slots = Array(slotCount).fill(null);
+  const unplaced = [];
+  sortedKnockoutMatches((matches || []).filter(match => match?.stage === stage)).forEach(match => {
+    const position = Number(match.bracketPosition);
+    if (Number.isInteger(position) && position >= 0 && position < slotCount && !slots[position]) {
+      slots[position] = {...match, bracketPosition: position};
+    } else {
+      unplaced.push(match);
+    }
+  });
+  unplaced.forEach(match => {
+    const position = slots.findIndex(slot => !slot);
+    if (position >= 0) slots[position] = {...match, bracketPosition: position};
+  });
+  if (createMissing) {
+    slots.forEach((match, position) => {
+      if (!match) slots[position] = createKnockoutPlaceholderMatch(stage, position);
+    });
+  }
+  return slots;
+}
+
+function buildKnockoutBracketModel(matches, {createMissing=false}={}) {
+  const byStage = {};
+  KNOCKOUT_MAIN_STAGES.forEach(stage => {
+    byStage[stage] = placeKnockoutStageMatches(matches, stage, createMissing);
+  });
+  const extraMatches = sortedKnockoutMatches((matches || []).filter(match => match?.stage === 'third_place'));
+  KNOCKOUT_MAIN_STAGES.slice(1).forEach((stage, stageIndex) => {
+    const previousStage = KNOCKOUT_MAIN_STAGES[stageIndex];
+    byStage[stage].forEach((match, position) => {
+      if (!match) return;
+      const homeSource = byStage[previousStage][position * 2];
+      const awaySource = byStage[previousStage][position * 2 + 1];
+      match.homeSourceMatchId = homeSource?.id || match.homeSourceMatchId || null;
+      match.awaySourceMatchId = awaySource?.id || match.awaySourceMatchId || null;
+    });
+  });
+  return {byStage, extraMatches};
+}
+
+function flattenKnockoutBracketModel(model) {
+  return [
+    ...KNOCKOUT_MAIN_STAGES.flatMap(stage => (model.byStage[stage] || []).filter(Boolean)),
+    ...(model.extraMatches || [])
+  ];
+}
+
+function knockoutWinnerTeam(match) {
+  if (!match) return '';
+  const explicit = (match.winnerId || match.advancingTeam || '').toString().trim();
+  if (explicit) return explicit;
+  const homeScore = scoreNumber(match.actualHomeScore);
+  const awayScore = scoreNumber(match.actualAwayScore);
+  if (homeScore === null || awayScore === null || homeScore === awayScore) return '';
+  return homeScore > awayScore ? match.homeTeam : match.awayTeam;
+}
+
+function determineKnockoutWinner(match, homeScore, awayScore, selectedWinner='') {
+  if (!match) return '';
+  if (homeScore > awayScore) return match.homeTeam || '';
+  if (awayScore > homeScore) return match.awayTeam || '';
+  const selected = (selectedWinner || '').toString().trim();
+  return selected === match.homeTeam || selected === match.awayTeam ? selected : '';
+}
+
+function knockoutMatchHasResult(match) {
+  return scoreNumber(match?.actualHomeScore) !== null || scoreNumber(match?.actualAwayScore) !== null
+    || !!match?.winnerId || !!match?.advancingTeam || match?.status === 'finished' || match?.status === 'scored';
+}
+
+function clearKnockoutMatchResult(match) {
+  if (!match) return;
+  match.actualHomeScore = null;
+  match.actualAwayScore = null;
+  match.actualWinner = null;
+  match.advancingTeam = null;
+  match.winnerId = null;
+  match.status = 'open';
+  match.scoredAt = null;
+  match.updatedAt = Date.now();
+}
+
+function rebuildKnockoutProgression(matches, {createMissing=true}={}) {
+  const model = buildKnockoutBracketModel(matches, {createMissing});
+  const invalidatedMatchIds = new Set();
+
+  KNOCKOUT_MAIN_STAGES.slice(0, -1).forEach(stage => {
+    const nextStage = KNOCKOUT_NEXT_STAGE[stage];
+    (model.byStage[stage] || []).forEach((sourceMatch, sourcePosition) => {
+      if (!sourceMatch) return;
+      const targetMatch = model.byStage[nextStage]?.[Math.floor(sourcePosition / 2)];
+      if (!targetMatch) return;
+      const slot = sourcePosition % 2 === 0 ? 'home' : 'away';
+      const teamKey = `${slot}Team`;
+      const sourceKey = `${slot}TeamSource`;
+      const sourceIdKey = `${slot}SourceMatchId`;
+      const winner = knockoutWinnerTeam(sourceMatch);
+      const currentTeam = (targetMatch[teamKey] || '').toString();
+      const wasDerivedFromSource = targetMatch[sourceKey] === sourceMatch.id;
+      targetMatch[sourceIdKey] = sourceMatch.id;
+
+      if (winner) {
+        if (currentTeam !== winner) {
+          if (knockoutMatchHasResult(targetMatch)) {
+            clearKnockoutMatchResult(targetMatch);
+            invalidatedMatchIds.add(targetMatch.id);
+          }
+          targetMatch[teamKey] = winner;
+          targetMatch.updatedAt = Date.now();
+        }
+        targetMatch[sourceKey] = sourceMatch.id;
+      } else if (wasDerivedFromSource) {
+        if (currentTeam || knockoutMatchHasResult(targetMatch)) {
+          clearKnockoutMatchResult(targetMatch);
+          invalidatedMatchIds.add(targetMatch.id);
+        }
+        targetMatch[teamKey] = '';
+        targetMatch[sourceKey] = null;
+        targetMatch.updatedAt = Date.now();
+      }
+    });
+  });
+
+  return {matches: flattenKnockoutBracketModel(model), model, invalidatedMatchIds: [...invalidatedMatchIds]};
 }
 
 function knockoutMatchResultText(match) {
@@ -2776,6 +2964,87 @@ function knockoutMatchResultText(match) {
     && match?.actualAwayScore !== null && match?.actualAwayScore !== undefined;
   if (!hasScore) return '';
   return `${match.actualHomeScore}:${match.actualAwayScore}`;
+}
+
+function knockoutPlaceholderTeam(stage, bracketPosition, slot) {
+  if (stage === 'round_of_32') return 'TBD';
+  const stageIndex = KNOCKOUT_MAIN_STAGES.indexOf(stage);
+  const previousStage = KNOCKOUT_MAIN_STAGES[stageIndex - 1];
+  const sourcePosition = bracketPosition * 2 + (slot === 'away' ? 1 : 0);
+  return previousStage ? `מנצחת ${knockoutStageLabel(previousStage)} ${sourcePosition + 1}` : 'TBD';
+}
+
+function TeamFlag(team, placeholder='TBD') {
+  const value = (team || placeholder || 'TBD').toString();
+  if (isKnockoutPlaceholderTeam(value)) return `<span class="ko-bracket-placeholder">${escapeHtml(value)}</span>`;
+  return teamHtml(value);
+}
+
+function BracketMatch(match, stage, bracketPosition, side='right') {
+  const homeTeam = match?.homeTeam || knockoutPlaceholderTeam(stage, bracketPosition, 'home');
+  const awayTeam = match?.awayTeam || knockoutPlaceholderTeam(stage, bracketPosition, 'away');
+  const winner = knockoutWinnerTeam(match);
+  const hasScore = scoreNumber(match?.actualHomeScore) !== null && scoreNumber(match?.actualAwayScore) !== null;
+  const dateText = [match?.date ? formatDate(match.date) : '', match?.time || ''].filter(Boolean).join(' · ');
+  const matchNumber = bracketPosition + 1;
+  return `
+    <article class="ko-bracket-match" data-side="${escapeHtml(side)}" data-stage="${escapeHtml(stage)}" data-position="${bracketPosition}">
+      <div class="ko-bracket-match-meta"><span>${escapeHtml(knockoutStageLabel(stage))} ${matchNumber}</span><span>${escapeHtml(dateText || 'טרם נקבע')}</span></div>
+      <div class="ko-bracket-team ${winner && winner === homeTeam ? 'winner' : ''}">
+        ${TeamFlag(homeTeam)}
+        <span class="ko-bracket-team-score">${hasScore ? escapeHtml(String(match.actualHomeScore)) : '–'}</span>
+      </div>
+      <div class="ko-bracket-team ${winner && winner === awayTeam ? 'winner' : ''}">
+        ${TeamFlag(awayTeam)}
+        <span class="ko-bracket-team-score">${hasScore ? escapeHtml(String(match.actualAwayScore)) : '–'}</span>
+      </div>
+    </article>`;
+}
+
+function BracketRound(stage, matches, side, startPosition=0) {
+  return `
+    <section class="ko-bracket-round" data-side="${escapeHtml(side)}" data-stage="${escapeHtml(stage)}">
+      <div class="ko-bracket-round-title">${escapeHtml(knockoutStageLabel(stage))}</div>
+      <div class="ko-bracket-round-matches">
+        ${(matches || []).map((match, index) => BracketMatch(match, stage, startPosition + index, side)).join('')}
+      </div>
+    </section>`;
+}
+
+function Champion(finalMatch) {
+  const champion = knockoutWinnerTeam(finalMatch);
+  return `
+    <div class="ko-champion">
+      <div class="ko-champion-trophy">🏆</div>
+      <div class="ko-champion-label">זוכה</div>
+      <div class="ko-champion-team">${champion ? TeamFlag(champion) : '<span class="ko-bracket-placeholder">TBD</span>'}</div>
+    </div>`;
+}
+
+function KnockoutBracket(matches) {
+  const model = buildKnockoutBracketModel(matches, {createMissing:true});
+  const round32 = model.byStage.round_of_32;
+  const round16 = model.byStage.round_of_16;
+  const quarters = model.byStage.quarter_final;
+  const semis = model.byStage.semi_final;
+  const finalMatch = model.byStage.final[0];
+  return `
+    <div class="ko-bracket-scroll" aria-label="תרשים נוקאאוט עד הגמר">
+      <div class="ko-bracket-board">
+        ${BracketRound('round_of_32', round32.slice(8), 'left', 8)}
+        ${BracketRound('round_of_16', round16.slice(4), 'left', 4)}
+        ${BracketRound('quarter_final', quarters.slice(2), 'left', 2)}
+        ${BracketRound('semi_final', semis.slice(1), 'left', 1)}
+        <section class="ko-bracket-center">
+          ${Champion(finalMatch)}
+          ${BracketMatch(finalMatch, 'final', 0, 'center')}
+        </section>
+        ${BracketRound('semi_final', semis.slice(0,1), 'right', 0)}
+        ${BracketRound('quarter_final', quarters.slice(0,2), 'right', 0)}
+        ${BracketRound('round_of_16', round16.slice(0,4), 'right', 0)}
+        ${BracketRound('round_of_32', round32.slice(0,8), 'right', 0)}
+      </div>
+    </div>`;
 }
 
 function renderKnockoutSlot(stage, match, index) {
@@ -2831,22 +3100,17 @@ function renderKnockoutStage(stage, stageMatches) {
 }
 
 function renderKnockoutPage() {
-  const koMatches = sortedKnockoutMatches(loadData('knockoutMatches', []))
+  const storedMatches = loadData('knockoutMatches', []);
+  const koMatches = sortedKnockoutMatches(storedMatches)
     .filter(m => m && KNOCKOUT_MAIN_STAGES.includes(m.stage));
-  const extraMatches = sortedKnockoutMatches(loadData('knockoutMatches', []))
+  const extraMatches = sortedKnockoutMatches(storedMatches)
     .filter(m => m && m.stage === 'third_place');
-  const byStage = {};
-  KNOCKOUT_MAIN_STAGES.forEach(stage => byStage[stage] = []);
-  koMatches.forEach(match => {
-    if (!byStage[match.stage]) byStage[match.stage] = [];
-    byStage[match.stage].push(match);
-  });
-
-  const finishedCount = [...koMatches, ...extraMatches].filter(knockoutMatchResultText).length;
-  const totalKnown = koMatches.length + extraMatches.length;
-  const r16Known = byStage.round_of_16?.length || 0;
+  const realMatches = [...koMatches, ...extraMatches].filter(match => !match.isPlaceholder);
+  const finishedCount = realMatches.filter(knockoutMatchResultText).length;
+  const totalKnown = realMatches.length;
+  const round32Known = koMatches.filter(match => match.stage === 'round_of_32' && !match.isPlaceholder).length;
   const upcoming = [...koMatches, ...extraMatches]
-    .filter(m => Number(m.startsAt || 0) > Date.now())
+    .filter(m => !m.isPlaceholder && Number(m.startsAt || 0) > Date.now())
     .sort((a,b) => Number(a.startsAt || 0) - Number(b.startsAt || 0))[0];
   const nextText = upcoming ? `${knockoutStageLabel(upcoming.stage)} • ${formatDate(upcoming.date)} ${upcoming.time || ''}` : (totalKnown ? 'ממתינים לעדכון' : 'טרם הועלה CSV');
 
@@ -2854,19 +3118,17 @@ function renderKnockoutPage() {
     <div class="knockout-page">
       <section class="knockout-hero">
         <h2>נוקאאוט</h2>
-        <p>שלב ההכרעה מוצג כאן החל משמינית הגמר. כרגע זהו מסך צפייה בלבד; המשחקים יתעדכנו לפי קובץ CSV שיועלה בניהול.</p>
+        <p>הדרך לגביע מתחילה ב־32 הגדולות. המנצחות מתקדמות אוטומטית פנימה עד לגמר ולזוכה במרכז.</p>
       </section>
 
       <div class="knockout-kpis">
-        <div class="knockout-kpi"><strong>${totalKnown}</strong><span>משחקים הוזנו</span></div>
-        <div class="knockout-kpi"><strong>${r16Known}/8</strong><span>שמינית גמר</span></div>
+        <div class="knockout-kpi"><strong>${totalKnown}/31</strong><span>משחקי בראקט הוזנו</span></div>
+        <div class="knockout-kpi"><strong>${round32Known}/16</strong><span>32 הגדולות</span></div>
         <div class="knockout-kpi"><strong>${finishedCount}</strong><span>תוצאות עודכנו</span></div>
         <div class="knockout-kpi"><strong style="font-size:16px">${escapeHtml(nextText)}</strong><span>המשחק הבא</span></div>
       </div>
 
-      <div class="knockout-bracket">
-        ${KNOCKOUT_MAIN_STAGES.map(stage => renderKnockoutStage(stage, byStage[stage] || [])).join('')}
-      </div>
+      ${KnockoutBracket(koMatches)}
 
       ${extraMatches.length ? `
         <section>
@@ -3944,6 +4206,7 @@ function resetMatchResult(match) {
     actualAwayScore: null,
     actualWinner: null,
     advancingTeam: null,
+    winnerId: null,
     scoredAt: null,
     updatedAt: Date.now()
   };
@@ -4673,7 +4936,8 @@ window.calcKnockoutStageBonus = async function(stage, keyPrefix, matchCount) {
 // ADMIN: KNOCKOUT
 // ============================================================
 function renderAdminKnockout() {
-  const koMatches = loadData('knockoutMatches', []);
+  const koMatches = sortedKnockoutMatches(loadData('knockoutMatches', []))
+    .filter(match => !match.isPlaceholder || match.homeTeam || match.awayTeam || match.date || match.time);
   const stageLabels = KNOCKOUT_STAGE_LABELS;
   
   return `
@@ -4689,13 +4953,13 @@ function renderAdminKnockout() {
       <div class="card-header"><span class="card-title">ייבוא CSV נוקאאוט</span></div>
       <div class="card-body">
         <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
-          פורמט מומלץ: שלב, תאריך, שעה, המשחק, עיר מארחת. לדוגמה: שמינית גמר,29.6,21:00,מנצחת בית א - סגנית בית ב,דאלאס
+          פורמט מומלץ: שלב, תאריך, שעה, המשחק, עיר מארחת. לדוגמה: 32 הגדולות,29.6,21:00,מנצחת בית א - סגנית בית ב,דאלאס
         </p>
         <div class="file-drop" id="koFileDrop" style="cursor:pointer">
           <input type="file" accept=".csv" id="koFileInput" style="display:none">
           <div class="file-drop-icon">📁</div>
           <div class="file-drop-text">לחץ לבחירת קובץ CSV נוקאאוט</div>
-          <div class="file-drop-hint">שלבים נתמכים: שמינית גמר, רבע גמר, חצי גמר, גמר, מקום שלישי</div>
+          <div class="file-drop-hint">שלבים נתמכים: 32 הגדולות, שמינית גמר, רבע גמר, חצי גמר, גמר, מקום שלישי</div>
         </div>
         <div id="koUploadError"></div>
         <div id="koPreview"></div>
@@ -4754,11 +5018,12 @@ function renderAdminKnockout() {
             <span class="score-sep">:</span>
             <input type="number" min="0" class="score-input" style="width:52px" id="kra_${m.id}" value="${m.actualAwayScore??''}" placeholder="0">
             <select class="form-input" style="width:auto;padding:8px;flex:1" id="kradv_${m.id}">
-              <option value="">-- מי עולה --</option>
-              <option value="${escapeHtml(m.homeTeam)}" ${m.advancingTeam===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>
-              <option value="${escapeHtml(m.awayTeam)}" ${m.advancingTeam===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>
+              <option value="">-- עולה אחרי תיקו / פנדלים --</option>
+              ${m.homeTeam ? `<option value="${escapeHtml(m.homeTeam)}" ${(m.winnerId||m.advancingTeam)===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>` : ''}
+              ${m.awayTeam ? `<option value="${escapeHtml(m.awayTeam)}" ${(m.winnerId||m.advancingTeam)===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>` : ''}
             </select>
           </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:7px">ללא תיקו המנצחת מחושבת אוטומטית. בתיקו חובה לבחור עולה.</div>
           <div style="display:flex;gap:8px;margin-top:10px">
             <button class="btn btn-primary btn-sm" onclick="saveKOResult('${m.id}')">שמור תוצאה</button>
             <button class="btn btn-yellow btn-sm" onclick="calcKOMatch('${m.id}')">חשב ניקוד</button>
@@ -4839,9 +5104,10 @@ function parseKOMatchesCsv(csvText) {
 
   const matches = [];
   const errors = [];
+  const stagePositions = {};
   dataRows.forEach((cols, rowIndex) => {
     const lineNumber = (hasHeader ? rowIndex + 2 : rowIndex + 1);
-    const stage = normalizeKnockoutStage(indexes.stage >= 0 ? cols[indexes.stage] : 'round_of_16');
+    const stage = normalizeKnockoutStage(indexes.stage >= 0 ? cols[indexes.stage] : 'round_of_32');
     const date = (cols[indexes.date] || '').trim();
     const time = (cols[indexes.time] || '').trim();
     const game = (cols[indexes.game] || '').trim();
@@ -4857,11 +5123,19 @@ function parseKOMatchesCsv(csvText) {
     const [hh, mm] = (time || '00:00').split(':');
     const startsAt = new Date(2026, parseInt(month)-1, parseInt(day), parseInt(hh)||0, parseInt(mm)||0).getTime();
     if (!Number.isFinite(startsAt)) { errors.push(`שורה ${lineNumber}: תאריך או שעה לא תקינים`); return; }
+    const bracketPosition = stagePositions[stage] || 0;
+    stagePositions[stage] = bracketPosition + 1;
+    const stageLimit = KNOCKOUT_STAGE_SLOTS[stage];
+    if (stageLimit && bracketPosition >= stageLimit) {
+      errors.push(`שורה ${lineNumber}: יותר מדי משחקים בשלב ${knockoutStageLabel(stage)} (מקסימום ${stageLimit})`);
+      return;
+    }
 
     const now = Date.now();
     matches.push({
-      id: `ko_${stage}_${matches.length + 1}_${uid()}`,
+      id: `ko_${stage}_${bracketPosition + 1}_${uid()}`,
       stage,
+      bracketPosition,
       date,
       time: time || '',
       startsAt,
@@ -4873,6 +5147,7 @@ function parseKOMatchesCsv(csvText) {
       actualAwayScore: null,
       actualWinner: null,
       advancingTeam: null,
+      winnerId: null,
       createdAt: now,
       updatedAt: now
     });
@@ -4909,14 +5184,71 @@ window.clearKOMatchesPreview = function() {
   if (prev) prev.innerHTML = '';
 };
 
+function isKnockoutPlaceholderTeam(team) {
+  const value = (team || '').toString().trim().toLowerCase();
+  return !value || value === 'tbd' || value.includes('מנצחת') || value.includes('winner');
+}
+
+function mergeKnockoutImportedMatches(existing, incoming) {
+  const base = flattenKnockoutBracketModel(buildKnockoutBracketModel(existing, {createMissing:true}));
+  const bySlot = new Map(base.filter(match => KNOCKOUT_MAIN_STAGES.includes(match.stage))
+    .map(match => [`${match.stage}:${match.bracketPosition}`, match]));
+  const extras = base.filter(match => match.stage === 'third_place');
+
+  incoming.forEach(match => {
+    if (match.stage === 'third_place') {
+      extras.push(match);
+      return;
+    }
+    const key = `${match.stage}:${match.bracketPosition}`;
+    const previous = bySlot.get(key);
+    if (!previous) {
+      bySlot.set(key, match);
+      return;
+    }
+    const previousHome = previous.homeTeam || '';
+    const previousAway = previous.awayTeam || '';
+    const homeTeam = !isKnockoutPlaceholderTeam(previousHome) && isKnockoutPlaceholderTeam(match.homeTeam) ? previousHome : match.homeTeam;
+    const awayTeam = !isKnockoutPlaceholderTeam(previousAway) && isKnockoutPlaceholderTeam(match.awayTeam) ? previousAway : match.awayTeam;
+    const teamsChanged = previousHome && previousAway && (previousHome !== homeTeam || previousAway !== awayTeam);
+    const merged = {
+      ...previous,
+      ...match,
+      id: previous.isPlaceholder ? match.id : previous.id,
+      homeTeam,
+      awayTeam,
+      homeTeamSource: homeTeam === previousHome ? previous.homeTeamSource : null,
+      awayTeamSource: awayTeam === previousAway ? previous.awayTeamSource : null,
+      isPlaceholder: false,
+      updatedAt: Date.now()
+    };
+    if (knockoutMatchHasResult(previous) && !teamsChanged) {
+      ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','winnerId','status','scoredAt'].forEach(field => {
+        merged[field] = previous[field];
+      });
+    } else if (teamsChanged) {
+      clearKnockoutMatchResult(merged);
+    }
+    bySlot.set(key, merged);
+  });
+
+  return [...bySlot.values(), ...extras];
+}
+
 window.importKOMatches = async function(mode='replace') {
   const incoming = pendingKOMatchImport;
   if (!incoming.length) { showToast('אין משחקים לייבוא'); return; }
   const existing = loadData('knockoutMatches', []);
-  const matches = mode === 'append' ? [...existing, ...incoming] : incoming;
-  saveData('knockoutMatches', matches);
+  const source = mode === 'append' ? mergeKnockoutImportedMatches(existing, incoming) : incoming;
+  const rebuilt = rebuildKnockoutProgression(source, {createMissing:true});
+  const invalidated = new Set(rebuilt.invalidatedMatchIds);
+  const currentPredictions = loadData('knockoutPredictions', []);
+  const predictions = mode === 'replace' ? [] : currentPredictions.filter(pred => !invalidated.has(pred.matchId));
+  saveData('knockoutMatches', rebuilt.matches);
+  if (mode === 'replace' || predictions.length !== currentPredictions.length) saveData('knockoutPredictions', predictions);
   pendingKOMatchImport = [];
-  await showStateSaveToast(`יובאו ${incoming.length} משחקי נוקאאוט`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutMatches']);
+  const keys = mode === 'replace' || predictions.length !== currentPredictions.length ? ['knockoutMatches','knockoutPredictions'] : ['knockoutMatches'];
+  await showStateSaveToast(`יובאו ${incoming.length} משחקי נוקאאוט ונבנה בראקט מלא`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', keys);
   switchAdminPanel('knockout');
 };
 
@@ -4935,9 +5267,19 @@ window.addKOMatch = async function() {
   const startsAt = new Date(2026, parseInt(month)-1, parseInt(day), parseInt(h), parseInt(m)).getTime();
   
   const now = Date.now();
-  kms.push({id:'ko_'+uid(),stage,date,time,startsAt,homeTeam:home,awayTeam:away,hostCity:city||'',
-    status:'open',actualHomeScore:null,actualAwayScore:null,actualWinner:null,advancingTeam:null,createdAt:now,updatedAt:now});
-  saveData('knockoutMatches', kms);
+  let bracketPosition = 0;
+  if (KNOCKOUT_MAIN_STAGES.includes(stage)) {
+    const occupied = new Set(kms.filter(match => match.stage === stage && !match.isPlaceholder).map(match => Number(match.bracketPosition)));
+    bracketPosition = Array.from({length:KNOCKOUT_STAGE_SLOTS[stage]}, (_, index) => index).find(index => !occupied.has(index));
+    if (bracketPosition === undefined) { showToast(`אין מקום פנוי נוסף בשלב ${knockoutStageLabel(stage)}`); return; }
+  } else {
+    bracketPosition = kms.filter(match => match.stage === stage).length;
+  }
+  const incoming = {id:'ko_'+uid(),stage,bracketPosition,date,time,startsAt,homeTeam:home,awayTeam:away,hostCity:city||'',
+    status:'open',actualHomeScore:null,actualAwayScore:null,actualWinner:null,advancingTeam:null,winnerId:null,createdAt:now,updatedAt:now};
+  kms = mergeKnockoutImportedMatches(kms, [incoming]);
+  const rebuilt = rebuildKnockoutProgression(kms, {createMissing:true});
+  saveData('knockoutMatches', rebuilt.matches);
   await showStateSaveToast('✅ משחק נוקאאוט נוסף', 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutMatches']);
   switchAdminPanel('knockout');
 };
@@ -4945,8 +5287,12 @@ window.addKOMatch = async function() {
 window.deleteKOMatch = async function(id) {
   if (!confirm('למחוק משחק?')) return;
   let kms = loadData('knockoutMatches',[]);
-  saveData('knockoutMatches', kms.filter(m => m.id !== id));
-  await showStateSaveToast('נמחק', 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutMatches']);
+  const rebuilt = rebuildKnockoutProgression(kms.filter(m => m.id !== id), {createMissing:true});
+  const invalidated = new Set([id, ...rebuilt.invalidatedMatchIds]);
+  const koPredictions = loadData('knockoutPredictions', []).filter(pred => !invalidated.has(pred.matchId));
+  saveData('knockoutMatches', rebuilt.matches);
+  saveData('knockoutPredictions', koPredictions);
+  await showStateSaveToast('נמחק', 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutMatches','knockoutPredictions']);
   switchAdminPanel('knockout');
 };
 
@@ -4958,10 +5304,19 @@ window.saveKOResult = async function(id) {
   let kms = loadData('knockoutMatches',[]);
   const m = kms.find(x => x.id===id);
   if (!m) return;
+  if (!m.homeTeam || !m.awayTeam) { showToast('הקבוצות למשחק עדיין לא נקבעו'); return; }
+  const winner = determineKnockoutWinner(m, h, a, adv);
+  if (!winner) { showToast('בתיקו יש לבחור מי עלתה אחרי הארכה או פנדלים'); return; }
   m.actualHomeScore=h; m.actualAwayScore=a; m.actualWinner=getOutcome(h,a);
-  m.advancingTeam=adv||null; m.status='finished'; m.updatedAt=Date.now();
-  saveData('knockoutMatches',kms);
-  await showStateSaveToast('✅ תוצאה נשמרה', 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', ['knockoutMatches']);
+  m.advancingTeam=winner; m.winnerId=winner; m.status='finished'; m.updatedAt=Date.now();
+  const rebuilt = rebuildKnockoutProgression(kms, {createMissing:true});
+  const invalidated = new Set(rebuilt.invalidatedMatchIds);
+  const koPredictions = loadData('knockoutPredictions', []).filter(pred => !invalidated.has(pred.matchId));
+  saveData('knockoutMatches',rebuilt.matches);
+  if (invalidated.size) saveData('knockoutPredictions',koPredictions);
+  const keys = invalidated.size ? ['knockoutMatches','knockoutPredictions'] : ['knockoutMatches'];
+  await showStateSaveToast(`✅ תוצאה נשמרה · ${winner} עלתה`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', keys);
+  switchAdminPanel('knockout');
 };
 
 window.calcKOMatch = async function(id) {

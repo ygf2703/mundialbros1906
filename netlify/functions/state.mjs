@@ -215,6 +215,7 @@ function hasResult(match) {
     || match?.actualAwayScore !== null && match?.actualAwayScore !== undefined
     || !!match?.actualWinner
     || !!match?.advancingTeam
+    || !!match?.winnerId
     || match?.status === 'finished'
     || match?.status === 'scored';
 }
@@ -222,13 +223,18 @@ function hasResult(match) {
 function mergeMatch(base, incoming) {
   const merged = {...base, ...incoming};
   if (hasResult(base) && !hasResult(incoming)) {
-    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','scoredAt','status'].forEach(key => {
+    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','winnerId','scoredAt','status'].forEach(key => {
       merged[key] = base[key];
     });
   }
   if (hasResult(base) && hasResult(incoming) && latestTime(base) >= latestTime(incoming)) {
-    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','scoredAt','status'].forEach(key => {
+    ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','winnerId','scoredAt','status'].forEach(key => {
       merged[key] = base[key];
+    });
+  }
+  if (latestTime(base) >= latestTime(incoming)) {
+    ['homeTeam','awayTeam','homeTeamSource','awayTeamSource','homeSourceMatchId','awaySourceMatchId','bracketPosition','isPlaceholder'].forEach(key => {
+      if (key in base) merged[key] = base[key];
     });
   }
   return merged;
