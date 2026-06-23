@@ -638,6 +638,20 @@ const DAILY_BONUS_QUESTIONS = [
     options: ['1', 'צמד', 'שלושער ומעלה']
   },
   {
+    id: 'daily_2026_06_24_round3_goals',
+    dateLabel: 'סיבוב שלישי (24-28.6)',
+    lockDate: '24.6',
+    lockTime: '22:00',
+    question: 'כמה שערים יובקעו בסה"כ בכל 24 משחקי הסיבוב השלישי של שלב הבתים?',
+    options: ['מתחת ל-75 שערים', 'בדיוק 75 שערים', 'מעל 75 שערים'],
+    pointsByOption: {
+      'מתחת ל-75 שערים': 2,
+      'בדיוק 75 שערים': 7,
+      'מעל 75 שערים': 4
+    },
+    scoringNote: 'ניקוד מיוחד: מתחת ל-75 = 2 נקודות, בדיוק 75 = 7 נקודות, מעל 75 = 4 נקודות.'
+  },
+  {
     id: 'daily_2026_06_24',
     dateLabel: '24-25.6 (6 משחקים)',
     lockDate: '24.6',
@@ -1508,6 +1522,9 @@ function initUsers() {
     {id:'u_benny_lalo',fullName:'בני לאלו',displayName:'בני לאלו',teamName:'רק מכבי',email:'lalobenny@gmail.com',phone:'053-606-5511'},
     {id:'u_dudi_mualem',fullName:'דודי מועלם',displayName:'דודי מועלם',teamName:'מכבי דריקס',email:'davidmu52@gmail.com',phone:'052-326-5182'}
   ];
+  if (location.protocol === 'file:') {
+    seededUsers.push({id:'u_noam_frostig',fullName:'נועם פרוסטיג',displayName:'נועם פרוסטיג',teamName:'',email:'noamfrostig@gmail.com',phone:''});
+  }
   const existing = loadData('users', []);
   const users = Array.isArray(existing) ? existing : [];
   let changed = false;
@@ -1807,7 +1824,7 @@ function deriveUserScoreMap(source={}) {
     DAILY_BONUS_QUESTIONS.forEach(question => {
       const actual = getDailyBonusActualValue(question.id, dailyActuals);
       if (actual && sameScoreText(dailyAnswers[question.id], actual)) {
-        addScore(scores, userId, dailyBonusQuestionPoints(question), {bonus: true});
+        addScore(scores, userId, dailyBonusQuestionPoints(question, actual), {bonus: true});
       }
     });
   });
@@ -1879,7 +1896,7 @@ function rebuildScoreStateFromSavedData() {
         return;
       }
       const answer = normalizeDailyBonusValue(answers[question.id]);
-      const earned = answer && answer === actual ? dailyBonusQuestionPoints(question) : 0;
+      const earned = answer && answer === actual ? dailyBonusQuestionPoints(question, actual) : 0;
       scores[question.id] = {
         points: earned,
         correct: earned > 0,
@@ -2661,7 +2678,8 @@ function renderRulesPage() {
     ['מלך השערים', `${SCORING.topScorer} נקודות`],
     ['אלופת העולם', `${SCORING.tournamentWinner} נקודות`],
     ['שאלת בונוס יומית כן/לא', `${SCORING.dailyBonus} נקודות`],
-    ['שאלת בונוס יומית בחירה מדויקת', `${SCORING.dailyBonusExact} נקודות`]
+    ['שאלת בונוס יומית בחירה מדויקת', `${SCORING.dailyBonusExact} נקודות`],
+    ['שאלת בונוס מיוחדת לסיבוב השלישי', '2/4/7 נקודות לפי התשובה']
   ];
 
   const scoringTable = `
@@ -2716,7 +2734,7 @@ function renderRulesPage() {
         <div class="rules-card-body">
           ${scoringTable}
           <div style="font-size:12px;color:var(--text3);margin-top:10px;line-height:1.45">
-            טעות בניחוש אינה מקנה נקודות. בשאלות בונוס יומיות, רק תשובה שתואמת בדיוק לתשובת האמת שהוזנה על ידי המנהל מקבלת ניקוד.
+            טעות בניחוש אינה מקנה נקודות. בשאלות בונוס יומיות, רק תשובה שתואמת בדיוק לתשובת האמת שהוזנה על ידי המנהל מקבלת ניקוד. בשאלות עם ניקוד משתנה, הנקודות נקבעות לפי האפשרות הנכונה.
           </div>
         </div>
       </section>
@@ -3383,8 +3401,35 @@ function getDailyBonusQuestion(questionId) {
   return DAILY_BONUS_QUESTIONS.find(q => q.id === questionId);
 }
 
-function dailyBonusQuestionPoints(question) {
+function dailyBonusOptionPoints(question, answer) {
+  const pointsByOption = plainObject(question?.pointsByOption);
+  const normalizedAnswer = normalizeDailyBonusValue(answer);
+  if (!Object.keys(pointsByOption).length || !normalizedAnswer) return null;
+  const matchKey = Object.keys(pointsByOption).find(option => normalizeDailyBonusValue(option) === normalizedAnswer);
+  return matchKey ? Number(pointsByOption[matchKey] || 0) : 0;
+}
+
+function dailyBonusQuestionPoints(question, answer='') {
+  const optionPoints = dailyBonusOptionPoints(question, answer);
+  if (optionPoints !== null) return optionPoints;
+
+  const customPointValues = Object.values(plainObject(question?.pointsByOption))
+    .map(Number)
+    .filter(Number.isFinite);
+  if (customPointValues.length) return Math.max(...customPointValues);
+
   return (question?.options || []).length > 2 ? SCORING.dailyBonusExact : SCORING.dailyBonus;
+}
+
+function dailyBonusQuestionPointsLabel(question) {
+  const customPointValues = Object.values(plainObject(question?.pointsByOption))
+    .map(Number)
+    .filter(Number.isFinite);
+  if (customPointValues.length) {
+    const uniqueValues = [...new Set(customPointValues)].sort((a,b) => a - b);
+    return `${uniqueValues.join('/')} נקודות`;
+  }
+  return `${dailyBonusQuestionPoints(question)} נקודות`;
 }
 
 function dailyBonusLockTimestamp(question) {
@@ -3417,7 +3462,7 @@ function renderDailyBonusPredictions(mySpecial={}) {
   const cards = DAILY_BONUS_QUESTIONS.map(question => {
     const selected = normalizeDailyBonusValue(answers[question.id]);
     const locked = dailyBonusIsLocked(question);
-    const points = dailyBonusQuestionPoints(question);
+    const pointsLabel = dailyBonusQuestionPointsLabel(question);
     const inputId = dailyBonusInputId(question.id);
     const savedAt = Number(times[question.id] || 0);
     const unknownSelected = selected && !question.options.includes(selected)
@@ -3433,13 +3478,14 @@ function renderDailyBonusPredictions(mySpecial={}) {
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
             <div>
               <div class="special-card-title">✨ ${escapeHtml(question.dateLabel)}</div>
-              <div style="font-size:11px;opacity:.76;margin-top:2px">${points} נקודות • ${dailyBonusLockText(question)}</div>
+              <div style="font-size:11px;opacity:.76;margin-top:2px">${pointsLabel} • ${dailyBonusLockText(question)}</div>
             </div>
             <span class="status-badge ${selected ? 'status-open' : locked ? 'status-locked' : 'status-scored'}">${selected ? 'נשמר' : locked ? 'נעול' : 'פתוח'}</span>
           </div>
         </div>
         <div class="special-card-body">
           <div style="font-size:14px;font-weight:800;color:var(--blue);line-height:1.35;margin-bottom:10px">${escapeHtml(question.question)}</div>
+          ${question.scoringNote ? `<div style="font-size:12px;color:var(--text3);font-weight:700;line-height:1.35;margin-bottom:10px">${escapeHtml(question.scoringNote)}</div>` : ''}
           ${locked ? `
             <div style="font-size:14px;font-weight:700;color:var(--text2)">${selected || 'לא נבחרה תשובה'}</div>
             <div class="status-badge status-locked" style="margin-top:8px;display:inline-flex">🔒 נעול</div>
@@ -3462,7 +3508,7 @@ function renderDailyBonusPredictions(mySpecial={}) {
         <h2 class="section-title" style="font-size:16px">✨ שאלות בונוס יומיות</h2>
         <span class="winner-chip">${answeredCount}/${DAILY_BONUS_QUESTIONS.length} נשמרו</span>
       </div>
-      <p style="font-size:12px;color:var(--text3);margin-bottom:12px">שאלות כן/לא שוות ${SCORING.dailyBonus} נקודות. שאלות בחירה מדויקת שוות ${SCORING.dailyBonusExact} נקודות.</p>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:12px">שאלות כן/לא שוות ${SCORING.dailyBonus} נקודות. שאלות בחירה מדויקת שוות ${SCORING.dailyBonusExact} נקודות. שאלות עם ניקוד מיוחד מציגות את הערכים בכרטיס.</p>
       <div class="daily-bonus-grid">${cards}</div>
     </div>`;
 }
@@ -4603,7 +4649,7 @@ function renderAdminDailyBonus() {
 
   const questionCards = DAILY_BONUS_QUESTIONS.map(question => {
     const actualValue = getDailyBonusActualValue(question.id, actuals);
-    const points = dailyBonusQuestionPoints(question);
+    const pointsLabel = dailyBonusQuestionPointsLabel(question);
     const answered = users.filter(user => normalizeDailyBonusValue(plainObject(specials[user.id]?.dailyBonus)[question.id])).length;
     const correct = actualValue
       ? users.filter(user => normalizeDailyBonusValue(plainObject(specials[user.id]?.dailyBonus)[question.id]) === actualValue).length
@@ -4617,12 +4663,13 @@ function renderAdminDailyBonus() {
         <div class="card-header">
           <div>
             <span class="card-title">${escapeHtml(question.dateLabel)}</span>
-            <div style="font-size:11px;color:var(--text3);margin-top:3px">${points} נקודות • ${dailyBonusLockText(question)}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">${pointsLabel} • ${dailyBonusLockText(question)}</div>
           </div>
           <span class="winner-chip">${answered}/${users.length} ענו</span>
         </div>
         <div class="card-body">
           <div style="font-size:14px;font-weight:800;color:var(--blue);line-height:1.35;margin-bottom:12px">${escapeHtml(question.question)}</div>
+          ${question.scoringNote ? `<div style="font-size:12px;color:var(--text3);font-weight:700;line-height:1.35;margin-bottom:12px">${escapeHtml(question.scoringNote)}</div>` : ''}
           <label class="form-label">תשובת אמת</label>
           <select class="form-input" id="${dailyBonusActualInputId(question.id)}" style="margin-bottom:10px">
             <option value="">-- בחר תשובה נכונה --</option>
@@ -4675,7 +4722,6 @@ function renderAdminDailyBonus() {
 }
 
 function applyDailyBonusQuestionScore(question, actualValue, users, specials) {
-  const pointsForCorrect = dailyBonusQuestionPoints(question);
   let answered = 0;
   let correct = 0;
   let totalPoints = 0;
@@ -4695,7 +4741,7 @@ function applyDailyBonusQuestionScore(question, actualValue, users, specials) {
     user.totalScore = Math.max(0, Number(user.totalScore || 0) - previousPoints);
 
     if (answer) answered++;
-    const earned = answer && answer === actualValue ? pointsForCorrect : 0;
+    const earned = answer && answer === actualValue ? dailyBonusQuestionPoints(question, actualValue) : 0;
     if (earned) correct++;
     totalPoints += earned;
 
