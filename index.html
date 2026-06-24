@@ -685,6 +685,57 @@ const DAILY_BONUS_QUESTIONS = [
   }
 ];
 
+const TEAM_FEATURED_PLAYERS = {
+  'מקסיקו': ['סנטיאגו חימנס', 'הירווינג לוסאנו'],
+  'דרום קוריאה': ['סון יונג-מין', 'קים מין-ג׳ה'],
+  'צ\'כיה': ['פטריק שיק'],
+  'דרום אפריקה': ['פרסי טאו'],
+  'קנדה': ['אלפונסו דייויס', 'ג׳ונתן דייויד'],
+  'בוסניה והרצגובינה': ['אדין דז׳קו'],
+  'שווייץ': ['גרניט ג׳אקה', 'בריל אמבולו'],
+  'קטאר': ['אכרם עפיף'],
+  'ארה"ב': ['כריסטיאן פוליסיק', 'פולרין באלוגון'],
+  'פראגוואי': ['מיגל אלמירון'],
+  'אוסטרליה': ['מת׳יו ראיין'],
+  'טורקיה': ['ארדה גולר', 'הקאן צ׳להאנולו'],
+  'ברזיל': ['ויניסיוס ג׳וניור', 'ראפיניה'],
+  'מרוקו': ['אשרף חכימי', 'יוסף א-נסירי'],
+  'האיטי': ['דוקנס נזון'],
+  'סקוטלנד': ['סקוט מקטומיניי', 'אנדרו רוברטסון'],
+  'גרמניה': ['פלוריאן וירץ', 'ג׳מאל מוסיאלה'],
+  'קוראסאו': ['לאנדרו בקונה'],
+  'חוף השנהב': ['סבסטיאן האלר', 'פרנק קסייה'],
+  'אקוודור': ['מויסס קאיסדו', 'אנר ולנסיה'],
+  'הולנד': ['קודי גאקפו', 'ממפיס דפאי'],
+  'יפן': ['טאקומי מינאמינו', 'קאורו מיטומה'],
+  'שבדיה': ['אלכסנדר איסאק', 'דיאן קולוסבסקי'],
+  'טוניסיה': ['אליאס סחירי'],
+  'ספרד': ['לאמין ימאל', 'אלברו מוראטה', 'מיקל אויארסבאל'],
+  'כף ורדה': ['בבה'],
+  'ערב הסעודית': ['סאלם א-דוסרי'],
+  'אורוגוואי': ['דרווין נונייס', 'פדריקו ואלוורדה'],
+  'בלגיה': ['רומלו לוקאקו', 'קווין דה בריינה'],
+  'מצרים': ['מוחמד סלאח'],
+  'איראן': ['מהדי טארמי', 'סרדר אזמון'],
+  'ניו זילנד': ['כריס ווד'],
+  'צרפת': ['קיליאן אמבפה', 'אוסמן דמבלה', 'מרקוס תוראם'],
+  'סנגל': ['סאדיו מאנה', 'ניקולא ג׳קסון'],
+  'נורבגיה': ['ארלינג הולאנד', 'מרטין אודגור'],
+  'עיראק': ['איימן חוסיין'],
+  'ארגנטינה': ['ליאונל מסי', 'חוליאן אלבארס', 'לאוטרו מרטינס'],
+  'אלג\'יריה': ['ריאד מחראז'],
+  'אוסטריה': ['מרקו ארנאוטוביץ׳', 'מרסל זביצר'],
+  'ירדן': ['מוסא אל-תעמארי'],
+  'פורטוגל': ['כריסטיאנו רונאלדו', 'ברונו פרננדש'],
+  'קונגו הדמוקרטית': ['יואן וויסה'],
+  'אוזבקיסטן': ['אלדור שומורודוב'],
+  'קולומביה': ['לואיס דיאס', 'חאמס רודריגס'],
+  'אנגליה': ['הארי קיין', 'בוקאיו סאקה', 'ג׳וד בלינגהאם'],
+  'קרואטיה': ['לוקה מודריץ׳', 'אנדריי קרמריץ׳'],
+  'גאנה': ['מוחמד קודוס', 'אנטואן סמןיו'],
+  'פנמה': ['אדגר ברסנאס']
+};
+
 const ADMIN_LOGIN_ALLOWED_EMAILS = ['noamfrostig@gmail.com', 'lalobenny@gmail.com'];
 const ADMIN_LOGIN_ALLOWED_PHONES = ['0526806838', '+972526806838'];
 
@@ -1821,7 +1872,7 @@ function deriveUserScoreMap(source={}) {
     }
 
     const dailyAnswers = plainObject(pred.dailyBonus);
-    DAILY_BONUS_QUESTIONS.forEach(question => {
+    getDailyBonusQuestions(koMatches).forEach(question => {
       const actual = getDailyBonusActualValue(question.id, dailyActuals);
       if (actual && sameScoreText(dailyAnswers[question.id], actual)) {
         addScore(scores, userId, dailyBonusQuestionPoints(question, actual), {bonus: true});
@@ -1885,11 +1936,12 @@ function rebuildScoreStateFromSavedData() {
   });
   const specialPredictions = getSpecialPredictions();
   const dailyActuals = loadData('dailyBonusActuals', {});
+  const dailyBonusQuestions = getDailyBonusQuestions(knockoutMatches);
   Object.entries(specialPredictions).forEach(([userId, pred]) => {
     if (!pred) return;
     const answers = plainObject(pred.dailyBonus);
     const scores = {...plainObject(pred.dailyBonusScores)};
-    DAILY_BONUS_QUESTIONS.forEach(question => {
+    dailyBonusQuestions.forEach(question => {
       const actual = getDailyBonusActualValue(question.id, dailyActuals);
       if (!actual) {
         delete scores[question.id];
@@ -2722,6 +2774,7 @@ function renderRulesPage() {
           <ul class="rules-list">
             <li>ניחוש תוצאה למשחק נסגר ${SCORING.lockMinutes} דקות לפני שריקת הפתיחה של אותו משחק.</li>
             <li>שאלות בונוס יומיות נסגרות ${SCORING.lockMinutes} דקות לפני המשחק הראשון של אותו ערב משחקים.</li>
+            <li>שאלות בונוס לשלב ההצלבה נבנות לפי משחקי הנוקאאוט שהוזנו, ויוצגו למשתמשים רק ביום המשחקים הרלוונטי.</li>
             <li>מלך השערים, אלופת העולם ובונוסי שלב הבתים נסגרים בתאריך ${OPENING_MATCH_BONUS_LOCK_LABEL}.</li>
             <li>הימורי נוקאאוט ובונוסים לפי שלב נסגרים לפני המשחק או השלב הרלוונטי כפי שמופיע במסך.</li>
             <li>אם בוצעו הימורים שלא נשמרו, המערכת תתריע: “בוצעו הימורים שלא נשמרו, שמור לפני יציאה”. ניחוש שלא נשמר לא ייחשב.</li>
@@ -3393,12 +3446,189 @@ window.saveDashboardPrediction = async function(matchId) {
 // ============================================================
 // SPECIAL PREDICTIONS
 // ============================================================
+function uniqueValues(values) {
+  return [...new Set((values || []).map(value => (value || '').toString().trim()).filter(Boolean))];
+}
+
+function parseBonusQuestionDateParts(date) {
+  const match = (date || '').toString().match(/(\d{1,2})\D+(\d{1,2})/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isFinite(day) || !Number.isFinite(month)) return null;
+  return {day, month};
+}
+
+function bonusQuestionDateKey(date) {
+  const parts = parseBonusQuestionDateParts(date);
+  if (!parts) return '';
+  return `2026_${String(parts.month).padStart(2,'0')}_${String(parts.day).padStart(2,'0')}`;
+}
+
+function isKnownKnockoutTeamName(team) {
+  const value = (team || '').toString().trim();
+  if (!value || isKnockoutPlaceholderTeam(value)) return false;
+  return !/(סגנית|עולה|מקום|runner|qualified|tbd|winner)/i.test(value);
+}
+
+function knockoutBonusMatchLabel(match) {
+  const home = (match?.homeTeam || '').toString().trim();
+  const away = (match?.awayTeam || '').toString().trim();
+  if (isKnownKnockoutTeamName(home) && isKnownKnockoutTeamName(away)) return `${home} - ${away}`;
+  return `${knockoutStageLabel(match?.stage)} ${Number(match?.bracketPosition || 0) + 1}`;
+}
+
+function knockoutBonusTeams(matches) {
+  return uniqueValues((matches || [])
+    .flatMap(match => [match.homeTeam, match.awayTeam])
+    .filter(isKnownKnockoutTeamName));
+}
+
+function knockoutBonusFeaturedPlayers(matches, limit=6) {
+  const teams = knockoutBonusTeams(matches);
+  const players = teams.flatMap(team => TEAM_FEATURED_PLAYERS[team] || []);
+  return uniqueValues(players).slice(0, limit);
+}
+
+function knockoutBonusStageSummary(matches) {
+  return uniqueValues((matches || []).map(match => knockoutStageLabel(match.stage))).join(' / ') || 'נוקאאוט';
+}
+
+function knockoutBonusQuestionFromDay(date, matches) {
+  const mainMatches = sortedKnockoutMatches(matches)
+    .filter(match => match && KNOCKOUT_MAIN_STAGES.includes(match.stage) && !match.isPlaceholder);
+  if (!mainMatches.length) return null;
+
+  const firstMatch = [...mainMatches]
+    .sort((a,b) => Number(a.startsAt || Infinity) - Number(b.startsAt || Infinity))[0];
+  const dateKey = bonusQuestionDateKey(date);
+  if (!dateKey || !firstMatch.time) return null;
+
+  const stage = firstMatch.stage;
+  const stageLabel = knockoutStageLabel(stage);
+  const stageSummary = knockoutBonusStageSummary(mainMatches);
+  const teams = knockoutBonusTeams(mainMatches);
+  const players = knockoutBonusFeaturedPlayers(mainMatches);
+  const matchLabels = uniqueValues(mainMatches.map(knockoutBonusMatchLabel));
+  const matchCount = mainMatches.length;
+  const base = {
+    id: `ko_daily_${dateKey}`,
+    source: 'knockout',
+    dateLabel: `הצלבה • ${date} • ${stageSummary}`,
+    lockDate: date,
+    lockTime: firstMatch.time,
+    scoringNote: `שאלת בונוס יומית לשלב ${stageSummary}. נסגרת לפי המשחק הראשון של אותו יום.`
+  };
+
+  if (stage === 'final') {
+    const playerOptions = players.length >= 3
+      ? [...players.slice(0, 5), 'שוער/שחקן הגנה', 'אחר']
+      : ['שחקן התקפה', 'קשר', 'שוער/שחקן הגנה', 'אחר'];
+    return {
+      ...base,
+      question: 'מי ייבחר לשחקן המשחק בגמר?',
+      options: uniqueValues(playerOptions)
+    };
+  }
+
+  if (stage === 'semi_final') {
+    if (players.length >= 3) {
+      return {
+        ...base,
+        question: `מי מהשחקנים המובילים יכבוש או יבשל ביום ${stageLabel}?`,
+        options: [...players.slice(0, 6), 'אף אחד מהם']
+      };
+    }
+    return {
+      ...base,
+      question: 'האם אחד ממשחקי חצי הגמר יגיע להארכה?',
+      options: ['כן', 'לא']
+    };
+  }
+
+  if (stage === 'quarter_final') {
+    if (teams.length >= 3) {
+      return {
+        ...base,
+        question: 'איזו נבחרת תשמור על שער נקי ביום רבע הגמר?',
+        options: [...teams.slice(0, 7), 'אף אחת']
+      };
+    }
+    return {
+      ...base,
+      question: 'כמה שערים יובקעו ביום רבע הגמר?',
+      options: ['עד 4', '5-6', '7 ומעלה']
+    };
+  }
+
+  if (stage === 'round_of_16') {
+    if (matchLabels.length >= 2) {
+      return {
+        ...base,
+        question: 'באיזה מפגש יובקעו הכי הרבה שערים ביום שמינית הגמר?',
+        options: [...matchLabels.slice(0, 6), 'שוויון בין שני משחקים או יותר']
+      };
+    }
+    return {
+      ...base,
+      question: 'כמה שערים יובקעו ביום שמינית הגמר?',
+      options: ['עד 4', '5-6', '7 ומעלה']
+    };
+  }
+
+  if (stage === 'round_of_32') {
+    if (players.length >= 3) {
+      return {
+        ...base,
+        question: `מי מהשחקנים הבולטים יכבוש או יבשל ביום ${stageLabel}?`,
+        options: [...players.slice(0, 6), 'אף אחד מהם']
+      };
+    }
+    if (teams.length >= 3) {
+      return {
+        ...base,
+        question: `איזו נבחרת תכבוש ראשונה ביום ${stageLabel}?`,
+        options: teams.slice(0, 8)
+      };
+    }
+  }
+
+  return {
+    ...base,
+    question: `כמה משחקים יוכרעו ב-90 דקות ביום ${stageLabel}?`,
+    options: matchCount <= 2 ? ['0', '1', '2'] : ['0-1', '2', '3 ומעלה']
+  };
+}
+
+function buildKnockoutBonusQuestions(matches=loadData('knockoutMatches', [])) {
+  const byDate = new Map();
+  sortedKnockoutMatches(matches || [])
+    .filter(match => match && !match.isPlaceholder && KNOCKOUT_MAIN_STAGES.includes(match.stage) && match.date && match.time)
+    .forEach(match => {
+      const key = bonusQuestionDateKey(match.date);
+      if (!key) return;
+      if (!byDate.has(key)) byDate.set(key, []);
+      byDate.get(key).push(match);
+    });
+
+  return [...byDate.values()]
+    .map(dayMatches => {
+      const sorted = sortedKnockoutMatches(dayMatches);
+      return knockoutBonusQuestionFromDay(sorted[0]?.date, sorted);
+    })
+    .filter(Boolean);
+}
+
+function getDailyBonusQuestions(knockoutMatches=loadData('knockoutMatches', [])) {
+  return [...DAILY_BONUS_QUESTIONS, ...buildKnockoutBonusQuestions(knockoutMatches)];
+}
+
 function dailyBonusInputId(questionId) {
   return `daily_bonus_${questionId}`;
 }
 
 function getDailyBonusQuestion(questionId) {
-  return DAILY_BONUS_QUESTIONS.find(q => q.id === questionId);
+  return getDailyBonusQuestions().find(q => q.id === questionId);
 }
 
 function dailyBonusOptionPoints(question, answer) {
@@ -3447,6 +3677,23 @@ function dailyBonusLockText(question) {
   return `נסגר 30 דקות לפני ${question.lockDate} ${question.lockTime}`;
 }
 
+function dailyBonusVisibilityRange(question) {
+  if (question?.source !== 'knockout') return {start: -Infinity, end: Infinity};
+  if (!question?.lockDate || !question?.lockTime) return {start: Infinity, end: -Infinity};
+  const [day, month] = question.lockDate.split('.').map(Number);
+  const [hour, minute] = question.lockTime.split(':').map(Number);
+  if (![day, month, hour].every(Number.isFinite)) return {start: Infinity, end: -Infinity};
+  const displayDayOffset = hour < 6 ? -1 : 0;
+  const start = new Date(2026, month - 1, day + displayDayOffset, 0, 0, 0).getTime();
+  const end = new Date(2026, month - 1, day + 1, 6, 0, 0).getTime();
+  return {start, end};
+}
+
+function dailyBonusQuestionVisibleToUser(question, now=Date.now()) {
+  const {start, end} = dailyBonusVisibilityRange(question);
+  return now >= start && now < end;
+}
+
 function normalizeDailyBonusValue(value) {
   return (value || '')
     .toString()
@@ -3457,9 +3704,12 @@ function normalizeDailyBonusValue(value) {
 function renderDailyBonusPredictions(mySpecial={}) {
   const answers = plainObject(mySpecial.dailyBonus);
   const times = plainObject(mySpecial.dailyBonusTimes);
-  const answeredCount = DAILY_BONUS_QUESTIONS.filter(q => answers[q.id]).length;
+  const allDailyBonusQuestions = getDailyBonusQuestions();
+  const dailyBonusQuestions = allDailyBonusQuestions.filter(dailyBonusQuestionVisibleToUser);
+  const hiddenKnockoutCount = allDailyBonusQuestions.filter(question => question.source === 'knockout' && !dailyBonusQuestionVisibleToUser(question)).length;
+  const answeredCount = dailyBonusQuestions.filter(q => answers[q.id]).length;
 
-  const cards = DAILY_BONUS_QUESTIONS.map(question => {
+  const cards = dailyBonusQuestions.map(question => {
     const selected = normalizeDailyBonusValue(answers[question.id]);
     const locked = dailyBonusIsLocked(question);
     const pointsLabel = dailyBonusQuestionPointsLabel(question);
@@ -3505,10 +3755,11 @@ function renderDailyBonusPredictions(mySpecial={}) {
   return `
     <div style="margin-bottom:16px">
       <div class="section-header">
-        <h2 class="section-title" style="font-size:16px">✨ שאלות בונוס יומיות</h2>
-        <span class="winner-chip">${answeredCount}/${DAILY_BONUS_QUESTIONS.length} נשמרו</span>
+        <h2 class="section-title" style="font-size:16px">✨ שאלות בונוס יומיות והצלבה</h2>
+        <span class="winner-chip">${answeredCount}/${dailyBonusQuestions.length} נשמרו</span>
       </div>
       <p style="font-size:12px;color:var(--text3);margin-bottom:12px">שאלות כן/לא שוות ${SCORING.dailyBonus} נקודות. שאלות בחירה מדויקת שוות ${SCORING.dailyBonusExact} נקודות. שאלות עם ניקוד מיוחד מציגות את הערכים בכרטיס.</p>
+      ${hiddenKnockoutCount ? `<p style="font-size:12px;color:var(--blue-light);font-weight:700;margin-bottom:12px">שאלות בונוס שלב ההצלבה מוכנות במערכת ויוצגו כאן רק ביום המשחקים הרלוונטי.</p>` : ''}
       <div class="daily-bonus-grid">${cards}</div>
     </div>`;
 }
@@ -4646,8 +4897,9 @@ function renderAdminDailyBonus() {
   const actuals = loadData('dailyBonusActuals', {});
   const specials = getSpecialPredictions();
   const users = loadData('users', []);
+  const dailyBonusQuestions = getDailyBonusQuestions();
 
-  const questionCards = DAILY_BONUS_QUESTIONS.map(question => {
+  const questionCards = dailyBonusQuestions.map(question => {
     const actualValue = getDailyBonusActualValue(question.id, actuals);
     const pointsLabel = dailyBonusQuestionPointsLabel(question);
     const answered = users.filter(user => normalizeDailyBonusValue(plainObject(specials[user.id]?.dailyBonus)[question.id])).length;
@@ -4689,8 +4941,8 @@ function renderAdminDailyBonus() {
     const userSpecial = specials[user.id] || {};
     const answers = plainObject(userSpecial.dailyBonus);
     const scores = plainObject(userSpecial.dailyBonusScores);
-    const answered = DAILY_BONUS_QUESTIONS.filter(q => answers[q.id]).length;
-    const dailyPoints = DAILY_BONUS_QUESTIONS.reduce((sum, q) => {
+    const answered = dailyBonusQuestions.filter(q => answers[q.id]).length;
+    const dailyPoints = dailyBonusQuestions.reduce((sum, q) => {
       const raw = scores[q.id];
       if (typeof raw === 'number') return sum + raw;
       return sum + Number(plainObject(raw).points || 0);
@@ -4699,17 +4951,17 @@ function renderAdminDailyBonus() {
       <tr>
         <td><strong>${user.fullName || user.displayName || 'משתמש'}</strong></td>
         <td style="color:var(--yellow-dark);font-weight:700">${user.teamName || '-'}</td>
-        <td>${answered}/${DAILY_BONUS_QUESTIONS.length}</td>
+        <td>${answered}/${dailyBonusQuestions.length}</td>
         <td><strong>${dailyPoints}</strong></td>
       </tr>`;
   }).join('');
 
   return `
-    <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">✨ ניהול שאלות בונוס יומיות</h2>
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">✨ ניהול שאלות בונוס יומיות והצלבה</h2>
     <p style="font-size:13px;color:var(--text2);margin-bottom:12px">שמור תשובת אמת לכל יום וחשב ניקוד. החישוב אינו מכפיל נקודות בלחיצה חוזרת.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px;background:rgba(255,214,10,.18);border:1px solid rgba(216,154,0,.22);border-radius:var(--radius)">
       <button class="btn btn-yellow btn-sm" type="button" data-admin-action="scoreAllDailyBonus">שמור תשובות במסך וחשב הכל</button>
-      <span style="font-size:12px;color:var(--text2);font-weight:700">${DAILY_BONUS_QUESTIONS.length} שאלות יומיות</span>
+      <span style="font-size:12px;color:var(--text2);font-weight:700">${dailyBonusQuestions.length} שאלות יומיות/הצלבה</span>
     </div>
     ${questionCards}
     <h3 style="font-size:15px;font-weight:700;margin:18px 0 10px">סיכום משתתפים</h3>
@@ -4806,8 +5058,9 @@ window.scoreDailyBonusQuestion = async function(questionId) {
 
 window.scoreAllDailyBonusQuestions = async function() {
   const actuals = loadData('dailyBonusActuals', {});
-  DAILY_BONUS_QUESTIONS.forEach(question => readAndStoreDailyBonusActualFromInput(question, actuals));
-  const readyQuestions = DAILY_BONUS_QUESTIONS.filter(question => getDailyBonusActualValue(question.id, actuals));
+  const dailyBonusQuestions = getDailyBonusQuestions();
+  dailyBonusQuestions.forEach(question => readAndStoreDailyBonusActualFromInput(question, actuals));
+  const readyQuestions = dailyBonusQuestions.filter(question => getDailyBonusActualValue(question.id, actuals));
   if (!readyQuestions.length) { showToast('אין תשובות אמת לחישוב'); return; }
 
   const specials = getSpecialPredictions();
