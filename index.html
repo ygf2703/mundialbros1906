@@ -2865,14 +2865,22 @@ function normalizeKnockoutStage(value) {
   return slug || 'round_of_32';
 }
 
+function normalizeKnockoutMatch(match) {
+  if (!match) return match;
+  const normalizedStage = normalizeKnockoutStage(match.stage);
+  const stage = KNOCKOUT_STAGE_LABELS[normalizedStage] ? normalizedStage : match.stage;
+  return {...match, stage};
+}
+
 function knockoutStageOrder(stage) {
   const order = [...KNOCKOUT_MAIN_STAGES, 'third_place'];
-  const index = order.indexOf(stage);
+  const normalizedStage = normalizeKnockoutStage(stage);
+  const index = order.indexOf(normalizedStage);
   return index === -1 ? 99 : index;
 }
 
 function sortedKnockoutMatches(matches) {
-  return [...(matches || [])].sort((a,b) => {
+  return (matches || []).filter(Boolean).map(normalizeKnockoutMatch).sort((a,b) => {
     const stageDiff = knockoutStageOrder(a.stage) - knockoutStageOrder(b.stage);
     if (stageDiff) return stageDiff;
     const positionDiff = Number(a.bracketPosition ?? 999) - Number(b.bracketPosition ?? 999);
@@ -2908,7 +2916,7 @@ function placeKnockoutStageMatches(matches, stage, createMissing=false) {
   const slotCount = KNOCKOUT_STAGE_SLOTS[stage] || 0;
   const slots = Array(slotCount).fill(null);
   const unplaced = [];
-  sortedKnockoutMatches((matches || []).filter(match => match?.stage === stage)).forEach(match => {
+  sortedKnockoutMatches(matches).filter(match => match?.stage === stage).forEach(match => {
     const position = Number(match.bracketPosition);
     if (Number.isInteger(position) && position >= 0 && position < slotCount && !slots[position]) {
       slots[position] = {...match, bracketPosition: position};
