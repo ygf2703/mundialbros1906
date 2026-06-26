@@ -2918,13 +2918,15 @@ function placeKnockoutStageMatches(matches, stage, createMissing=false) {
   const unplaced = [];
   sortedKnockoutMatches(matches).filter(match => match?.stage === stage).forEach(match => {
     const position = Number(match.bracketPosition);
-    if (Number.isInteger(position) && position >= 0 && position < slotCount && !slots[position]) {
+    const currentSlot = Number.isInteger(position) && position >= 0 && position < slotCount ? slots[position] : null;
+    if (Number.isInteger(position) && position >= 0 && position < slotCount && (!currentSlot || (currentSlot.isPlaceholder && !match.isPlaceholder))) {
       slots[position] = {...match, bracketPosition: position};
     } else {
       unplaced.push(match);
     }
   });
   unplaced.forEach(match => {
+    if (match.isPlaceholder) return;
     const position = slots.findIndex(slot => !slot);
     if (position >= 0) slots[position] = {...match, bracketPosition: position};
   });
