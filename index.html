@@ -1714,6 +1714,8 @@ function refreshPredictionViewsIfClean() {
     bindPredictions();
   } else if (currentPage === 'dashboard') {
     content.innerHTML = renderDashboard();
+  } else if (currentPage === 'knockout') {
+    content.innerHTML = renderKnockoutPage();
   }
 }
 
@@ -3267,6 +3269,116 @@ function renderKnockoutStage(stage, stageMatches) {
     </section>`;
 }
 
+function knockoutMatchHasTwoRealTeams(match) {
+  return !!match
+    && !!teamFlagCode(match.homeTeam)
+    && !!teamFlagCode(match.awayTeam)
+    && !isKnockoutPlaceholderTeam(match.homeTeam)
+    && !isKnockoutPlaceholderTeam(match.awayTeam);
+}
+
+function knockoutMatchReadyForPrediction(match) {
+  return !!match && !match.isPlaceholder && knockoutMatchHasTwoRealTeams(match)
+    && (KNOCKOUT_MAIN_STAGES.includes(match.stage) || match.stage === 'third_place');
+}
+
+function renderKnockoutPredictionCard(match, prediction) {
+  const locked = matchIsLocked(match);
+  const finalized = match.status === 'scored' || match.status === 'finished';
+  const disabled = locked || finalized;
+  const saved = predictionHasSavedPick(prediction);
+  const hv = prediction?.predictedHomeScore !== null && prediction?.predictedHomeScore !== undefined ? prediction.predictedHomeScore : '';
+  const av = prediction?.predictedAwayScore !== null && prediction?.predictedAwayScore !== undefined ? prediction.predictedAwayScore : '';
+  const adv = prediction?.predictedAdvancingTeam || '';
+  const officialLabel = match.officialMatchNumber ? `משחק FIFA ${match.officialMatchNumber}` : knockoutMatchAdminTitle(match);
+  const meta = [formatDate(match.date), match.time, match.hostCity].filter(Boolean).join(' • ');
+  let statusBadge = '';
+  if (finalized) statusBadge = '<span class="status-badge status-scored">חושב ניקוד</span>';
+  else if (locked) statusBadge = '<span class="status-badge status-locked">🔒 נעול</span>';
+  else if (saved) statusBadge = '<span class="status-badge status-saved">✓ נשמר</span>';
+  else statusBadge = '<span class="status-badge status-open">פתוח</span>';
+
+  const resultBadge = finalized && saved
+    ? `<span class="score-result ${Number(prediction?.scoreAwarded || 0) > 0 ? 'result-exact' : 'result-miss'}">+${Number(prediction?.scoreAwarded || 0)} נק'</span>`
+    : '';
+
+  return `
+    <div class="match-card">
+      <div class="match-card-header">
+        <span class="match-meta">${escapeHtml(officialLabel)}${meta ? ` • ${escapeHtml(meta)}` : ''}</span>
+        ${statusBadge}
+      </div>
+      <div class="match-body">
+        <div class="match-teams">
+          ${matchupHtml(match.homeTeam, match.awayTeam)}
+        </div>
+        <div class="score-inputs">
+          <input type="number" class="score-input" min="0" max="20"
+            id="kh_${match.id}" value="${escapeHtml(String(hv))}" ${disabled ? 'disabled' : ''}
+            placeholder="0" oninput="autoSaveKOPred('${match.id}')" onchange="autoSaveKOPred('${match.id}')">
+          <span class="score-sep">:</span>
+          <input type="number" class="score-input" min="0" max="20"
+            id="ka_${match.id}" value="${escapeHtml(String(av))}" ${disabled ? 'disabled' : ''}
+            placeholder="0" oninput="autoSaveKOPred('${match.id}')" onchange="autoSaveKOPred('${match.id}')">
+        </div>
+        <select class="form-input" id="kadv_${match.id}" ${disabled ? 'disabled' : ''} onchange="autoSaveKOPred('${match.id}')" style="margin-top:8px">
+          <option value="">בחר עולה לשלב הבא - נקודת בונוס</option>
+          <option value="${escapeHtml(match.homeTeam)}" ${adv === match.homeTeam ? 'selected' : ''}>${teamText(match.homeTeam)}</option>
+          <option value="${escapeHtml(match.awayTeam)}" ${adv === match.awayTeam ? 'selected' : ''}>${teamText(match.awayTeam)}</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:7px">ניחוש התוצאה הוא ל-90 דקות. תוצאה מדויקת 5 נק', כיוון נכון 2 נק', ועולה נכונה מוסיפה נקודה.</div>
+        ${match.actualHomeScore !== null && match.actualHomeScore !== undefined ? `
+          <div class="truth-result-line">
+            <span>תוצאה:</span> <strong>${scorePairHtml(match.actualHomeScore, match.actualAwayScore)}</strong>
+            ${resultBadge}
+          </div>` : ''}
+        <div class="match-footer">
+          <div style="font-size:11px;color:var(--text3)">${saved ? '✅ ניחוש שמור' : (locked ? 'לא ניחשת' : '')}</div>
+          ${!disabled ? `<button class="btn btn-primary btn-sm" type="button" onclick="saveKOPrediction('${match.id}')">${saved ? 'עדכן' : 'שמור'}</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderKnockoutPredictionsSection(matches) {
+  const predictionMatches = sortedKnockoutMatches(matches)
+    .filter(knockoutMatchReadyForPrediction)
+    .sort((a,b) => Number(a.startsAt || Infinity) - Number(b.startsAt || Infinity));
+  const koPreds = loadData('knockoutPredictions', []).filter(pred => pred.userId === currentUser?.id);
+  if (!predictionMatches.length) {
+    return `
+      <section>
+        <div class="section-header"><h2 class="section-title">ניחושי נוקאאוט</h2></div>
+        <div class="empty-state">
+          <div class="empty-icon">⚽</div>
+          <div class="empty-text">אין כרגע משחקי נוקאאוט פתוחים לניחוש</div>
+          <div class="empty-hint">ברגע ש-FIFA ישבץ שתי נבחרות למשחק, הוא יופיע כאן לניחוש.</div>
+        </div>
+      </section>`;
+  }
+
+  const byDate = {};
+  predictionMatches.forEach(match => {
+    const key = match.date || 'ללא תאריך';
+    if (!byDate[key]) byDate[key] = [];
+    byDate[key].push(match);
+  });
+
+  return `
+    <section>
+      <div class="section-header"><h2 class="section-title">ניחושי נוקאאוט</h2></div>
+      <div style="background:var(--blue);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--yellow);display:flex;gap:12px;flex-wrap:wrap">
+        <span>🎯 תוצאה מדויקת = <strong style="color:white">${SCORING.knockoutExact} נק'</strong></span>
+        <span>↗ כיוון נכון = <strong style="color:white">${SCORING.knockoutOutcome} נק'</strong></span>
+        <span>🏁 עולה נכונה = <strong style="color:white">${SCORING.knockoutAdvancing} נק'</strong></span>
+      </div>
+      ${Object.entries(byDate).map(([date, dayMatches]) => `
+        <div style="font-size:13px;font-weight:700;color:var(--text2);margin:16px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--blue-pale)">${date.includes('.') ? formatDate(date) : escapeHtml(date)}</div>
+        ${dayMatches.map(match => renderKnockoutPredictionCard(match, koPreds.find(pred => pred.matchId === match.id))).join('')}
+      `).join('')}
+    </section>`;
+}
+
 function renderKnockoutPage() {
   const storedMatches = normalizeKnockoutMatchList(loadData('knockoutMatches', []));
   const koMatches = sortedKnockoutMatches(storedMatches)
@@ -3277,6 +3389,7 @@ function renderKnockoutPage() {
   const finishedCount = realMatches.filter(knockoutMatchResultText).length;
   const totalKnown = realMatches.length;
   const round32Known = koMatches.filter(match => match.stage === 'round_of_32' && !match.isPlaceholder).length;
+  const predictionMatches = [...koMatches, ...extraMatches].filter(knockoutMatchReadyForPrediction);
   const upcoming = [...koMatches, ...extraMatches]
     .filter(m => !m.isPlaceholder && Number(m.startsAt || 0) > Date.now())
     .sort((a,b) => Number(a.startsAt || 0) - Number(b.startsAt || 0))[0];
@@ -3297,6 +3410,8 @@ function renderKnockoutPage() {
       </div>
 
       ${KnockoutBracket(koMatches)}
+
+      ${renderKnockoutPredictionsSection(predictionMatches)}
 
       ${extraMatches.length ? `
         <section>
@@ -3431,6 +3546,7 @@ window.saveKOPrediction = async function(matchId) {
     fallbackMessage: '✅ ניחוש נוקאאוט נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע',
     unsavedKey: 'ko:' + matchId
   });
+  refreshPredictionViewsIfClean();
 };
 
 window.autoSaveKOPred = function(matchId) {
