@@ -2846,6 +2846,85 @@ const KNOCKOUT_STAGE_LABELS = {
 const KNOCKOUT_MAIN_STAGES = ['round_of_32','round_of_16','quarter_final','semi_final','final'];
 const KNOCKOUT_STAGE_SLOTS = {round_of_32: 16, round_of_16: 8, quarter_final: 4, semi_final: 2, final: 1};
 const KNOCKOUT_NEXT_STAGE = {round_of_32:'round_of_16', round_of_16:'quarter_final', quarter_final:'semi_final', semi_final:'final'};
+const FIFA_KNOCKOUT_CALENDAR_URL = 'https://api.fifa.com/api/v3/calendar/matches?idCompetition=17&idSeason=285023&count=500&language=en';
+const FIFA_MATCH_CENTER_BASE_URL = 'https://www.fifa.com/en/match-centre/match/17/285023';
+const FIFA_STAGE_TO_KNOCKOUT_STAGE = {
+  'Round of 32': 'round_of_32',
+  'Round of 16': 'round_of_16',
+  'Quarter-final': 'quarter_final',
+  'Quarter-finals': 'quarter_final',
+  'Semi-final': 'semi_final',
+  'Semi-finals': 'semi_final',
+  'Final': 'final',
+  'Play-off for third place': 'third_place',
+  'Match for third place': 'third_place'
+};
+const FIFA_TEAM_CODE_TO_HEBREW = {
+  ALG:'אלג\'יריה', ARG:'ארגנטינה', AUS:'אוסטרליה', AUT:'אוסטריה',
+  BEL:'בלגיה', BIH:'בוסניה והרצגובינה', BRA:'ברזיל', CAN:'קנדה',
+  CIV:'חוף השנהב', COD:'קונגו הדמוקרטית', COL:'קולומביה', CPV:'כף ורדה',
+  CRO:'קרואטיה', CUW:'קוראסאו', CZE:'צ\'כיה', ECU:'אקוודור',
+  EGY:'מצרים', ENG:'אנגליה', ESP:'ספרד', FRA:'צרפת',
+  GER:'גרמניה', GHA:'גאנה', HAI:'האיטי', IRN:'איראן',
+  IRQ:'עיראק', JOR:'ירדן', JPN:'יפן', KOR:'דרום קוריאה',
+  KSA:'ערב הסעודית', MAR:'מרוקו', MEX:'מקסיקו', NED:'הולנד',
+  NOR:'נורבגיה', NZL:'ניו זילנד', PAN:'פנמה', PAR:'פראגוואי',
+  POR:'פורטוגל', QAT:'קטאר', RSA:'דרום אפריקה', SCO:'סקוטלנד',
+  SEN:'סנגל', SUI:'שווייץ', SWE:'שבדיה', TUN:'טוניסיה',
+  TUR:'טורקיה', URU:'אורוגוואי', USA:'ארה"ב', UZB:'אוזבקיסטן'
+};
+const FIFA_TEAM_NAME_TO_HEBREW = {
+  'Algeria':'אלג\'יריה', 'Argentina':'ארגנטינה', 'Australia':'אוסטרליה', 'Austria':'אוסטריה',
+  'Belgium':'בלגיה', 'Bosnia and Herzegovina':'בוסניה והרצגובינה', 'Brazil':'ברזיל', 'Canada':'קנדה',
+  'Cabo Verde':'כף ורדה', "Côte d'Ivoire":'חוף השנהב', 'Congo DR':'קונגו הדמוקרטית', 'Colombia':'קולומביה',
+  'Croatia':'קרואטיה', 'Curaçao':'קוראסאו', 'Czechia':'צ\'כיה', 'Ecuador':'אקוודור',
+  'Egypt':'מצרים', 'England':'אנגליה', 'France':'צרפת', 'Germany':'גרמניה',
+  'Ghana':'גאנה', 'Haiti':'האיטי', 'IR Iran':'איראן', 'Iraq':'עיראק',
+  'Japan':'יפן', 'Jordan':'ירדן', 'Korea Republic':'דרום קוריאה', 'Mexico':'מקסיקו',
+  'Morocco':'מרוקו', 'Netherlands':'הולנד', 'New Zealand':'ניו זילנד', 'Norway':'נורבגיה',
+  'Panama':'פנמה', 'Paraguay':'פראגוואי', 'Portugal':'פורטוגל', 'Qatar':'קטאר',
+  'Saudi Arabia':'ערב הסעודית', 'Scotland':'סקוטלנד', 'Senegal':'סנגל', 'South Africa':'דרום אפריקה',
+  'Spain':'ספרד', 'Sweden':'שבדיה', 'Switzerland':'שווייץ', 'Tunisia':'טוניסיה',
+  'Türkiye':'טורקיה', 'Uruguay':'אורוגוואי', 'USA':'ארה"ב', 'Uzbekistan':'אוזבקיסטן'
+};
+const FIFA_GROUP_LETTER_LABELS = {
+  A:'א', B:'ב', C:'ג', D:'ד', E:'ה', F:'ו',
+  G:'ז', H:'ח', I:'ט', J:'י', K:'יא', L:'יב'
+};
+const FIFA_KNOCKOUT_MATCH_POSITIONS = {
+  74:{stage:'round_of_32', bracketPosition:0},
+  77:{stage:'round_of_32', bracketPosition:1},
+  73:{stage:'round_of_32', bracketPosition:2},
+  75:{stage:'round_of_32', bracketPosition:3},
+  83:{stage:'round_of_32', bracketPosition:4},
+  84:{stage:'round_of_32', bracketPosition:5},
+  81:{stage:'round_of_32', bracketPosition:6},
+  82:{stage:'round_of_32', bracketPosition:7},
+  76:{stage:'round_of_32', bracketPosition:8},
+  78:{stage:'round_of_32', bracketPosition:9},
+  79:{stage:'round_of_32', bracketPosition:10},
+  80:{stage:'round_of_32', bracketPosition:11},
+  86:{stage:'round_of_32', bracketPosition:12},
+  88:{stage:'round_of_32', bracketPosition:13},
+  85:{stage:'round_of_32', bracketPosition:14},
+  87:{stage:'round_of_32', bracketPosition:15},
+  89:{stage:'round_of_16', bracketPosition:0},
+  90:{stage:'round_of_16', bracketPosition:1},
+  93:{stage:'round_of_16', bracketPosition:2},
+  94:{stage:'round_of_16', bracketPosition:3},
+  91:{stage:'round_of_16', bracketPosition:4},
+  92:{stage:'round_of_16', bracketPosition:5},
+  95:{stage:'round_of_16', bracketPosition:6},
+  96:{stage:'round_of_16', bracketPosition:7},
+  97:{stage:'quarter_final', bracketPosition:0},
+  98:{stage:'quarter_final', bracketPosition:1},
+  99:{stage:'quarter_final', bracketPosition:2},
+  100:{stage:'quarter_final', bracketPosition:3},
+  101:{stage:'semi_final', bracketPosition:0},
+  102:{stage:'semi_final', bracketPosition:1},
+  103:{stage:'third_place', bracketPosition:0},
+  104:{stage:'final', bracketPosition:0}
+};
 
 function knockoutStageLabel(stage) {
   return KNOCKOUT_STAGE_LABELS[stage] || stage || 'נוקאאוט';
@@ -3071,9 +3150,10 @@ function BracketMatch(match, stage, bracketPosition, side='right') {
   const hasScore = scoreNumber(match?.actualHomeScore) !== null && scoreNumber(match?.actualAwayScore) !== null;
   const dateText = [match?.date ? formatDate(match.date) : '', match?.time || ''].filter(Boolean).join(' · ');
   const matchNumber = bracketPosition + 1;
+  const officialLabel = match?.officialMatchNumber ? `משחק ${match.officialMatchNumber}` : `${knockoutStageLabel(stage)} ${matchNumber}`;
   return `
-    <article class="ko-bracket-match" data-side="${escapeHtml(side)}" data-stage="${escapeHtml(stage)}" data-position="${bracketPosition}">
-      <div class="ko-bracket-match-meta"><span>${escapeHtml(knockoutStageLabel(stage))} ${matchNumber}</span><span>${escapeHtml(dateText || 'טרם נקבע')}</span></div>
+    <article class="ko-bracket-match" data-side="${escapeHtml(side)}" data-stage="${escapeHtml(stage)}" data-position="${bracketPosition}" data-official-match="${escapeHtml(String(match?.officialMatchNumber || ''))}">
+      <div class="ko-bracket-match-meta"><span>${escapeHtml(officialLabel)}</span><span>${escapeHtml(dateText || 'טרם נקבע')}</span></div>
       <div class="ko-bracket-team ${winner && winner === homeTeam ? 'winner' : ''}">
         ${TeamFlag(homeTeam)}
         <span class="ko-bracket-team-score">${hasScore ? escapeHtml(String(match.actualHomeScore)) : '–'}</span>
@@ -5251,7 +5331,8 @@ function knockoutMatchAdminTitle(match) {
   const label = knockoutStageLabel(match?.stage);
   const position = Number(match?.bracketPosition);
   const slot = KNOCKOUT_STAGE_SLOTS[match?.stage] && Number.isInteger(position) ? ` ${position + 1}` : '';
-  return `${label}${slot}`;
+  const official = match?.officialMatchNumber ? `משחק FIFA ${match.officialMatchNumber} • ` : '';
+  return `${official}${label}${slot}`;
 }
 
 function renderAdminKnockout() {
@@ -5275,6 +5356,10 @@ function renderAdminKnockout() {
         <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
           פורמט מומלץ: שלב, תאריך, שעה, המשחק, עיר מארחת. לדוגמה: 32 הגדולות,29.6,21:00,מנצחת בית א - סגנית בית ב,דאלאס
         </p>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px;border:1px solid rgba(25,67,126,.2);border-radius:var(--radius-sm);background:rgba(13,67,126,.05)">
+          <button class="btn btn-primary btn-sm" onclick="loadFifaKnockoutMatchesPreview()">טען מ-FIFA הרשמי</button>
+          <span style="font-size:12px;color:var(--text2);font-weight:700">מקור רשמי: api.fifa.com. המיקום בבראקט נקבע לפי מספרי המשחקים הרשמיים.</span>
+        </div>
         <div class="file-drop" id="koFileDrop" style="cursor:pointer">
           <input type="file" accept=".csv" id="koFileInput" style="display:none">
           <div class="file-drop-icon">📁</div>
@@ -5333,6 +5418,7 @@ function renderAdminKnockout() {
           <div class="match-teams" style="margin-bottom:10px">
             ${matchupHtml(m.homeTeam, m.awayTeam)}
           </div>
+          ${m.officialSourceUrl ? `<div style="font-size:11px;color:var(--text3);font-weight:800;text-align:center;margin-bottom:8px"><a href="${escapeHtml(m.officialSourceUrl)}" target="_blank" rel="noopener">מקור רשמי FIFA — משחק ${escapeHtml(String(m.officialMatchNumber || ''))}</a></div>` : ''}
           <div style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap">
             <input type="number" min="0" class="score-input" style="width:52px" id="krh_${m.id}" value="${m.actualHomeScore??''}" placeholder="0">
             <span class="score-sep">:</span>
@@ -5386,6 +5472,28 @@ function processKOMatchesFile(file) {
   };
   reader.readAsText(file, 'UTF-8');
 }
+
+window.loadFifaKnockoutMatchesPreview = async function() {
+  const errorEl = document.getElementById('koUploadError');
+  const previewEl = document.getElementById('koPreview');
+  if (errorEl) errorEl.innerHTML = '';
+  if (previewEl) previewEl.innerHTML = '<div style="margin-top:12px;font-size:13px;color:var(--text2);font-weight:800">טוען משחקים מהמקור הרשמי של FIFA...</div>';
+  try {
+    const response = await fetch(FIFA_KNOCKOUT_CALENDAR_URL, {headers:{Accept:'application/json'}});
+    if (!response.ok) throw new Error(`FIFA החזיר שגיאה ${response.status}`);
+    const payload = await response.json();
+    const matches = mapFifaCalendarToKnockoutMatches(payload);
+    if (!matches.length) throw new Error('לא נמצאו משחקי נוקאאוט במענה הרשמי של FIFA');
+    if (errorEl) errorEl.innerHTML = '';
+    showKOMatchesPreview(matches);
+    showToast(`נטענו ${matches.length} משחקים מ-FIFA הרשמי`);
+  } catch(err) {
+    if (previewEl) previewEl.innerHTML = '';
+    if (errorEl) {
+      errorEl.innerHTML = `<div class="form-error">לא הצלחתי לטעון את FIFA הרשמי כרגע: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+};
 
 function csvHeaderIndex(headers, names, fallback) {
   const normalized = headers.map(h => (h || '').toString().trim().toLowerCase());
@@ -5477,17 +5585,138 @@ function parseKOMatchesCsv(csvText) {
   return {matches, errors};
 }
 
+function fifaText(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const preferred = value.find(item => /en/i.test(item?.Locale || item?.Language || '')) || value[0];
+    return preferred?.Description || preferred?.Name || preferred?.Text || '';
+  }
+  return value.Description || value.Name || value.Text || '';
+}
+
+function fifaPlaceholderText(placeholder) {
+  const value = (placeholder || '').toString().trim().toUpperCase();
+  if (!value) return 'TBD';
+  const winner = value.match(/^W(\d+)$/);
+  if (winner) return `מנצחת משחק ${winner[1]}`;
+  const runnerUp = value.match(/^RU(\d+)$/);
+  if (runnerUp) return `מפסידת משחק ${runnerUp[1]}`;
+  const groupRank = value.match(/^([123])([A-L]+)$/);
+  if (groupRank) {
+    const rankLabel = groupRank[1] === '1' ? 'מנצחת בית' : (groupRank[1] === '2' ? 'סגנית בית' : 'מקום שלישי בית');
+    const groups = groupRank[2].split('').map(letter => FIFA_GROUP_LETTER_LABELS[letter] || letter).join('/');
+    return `${rankLabel} ${groups}`;
+  }
+  return value;
+}
+
+function fifaTeamName(team, placeholder) {
+  const code = (team?.IdCountry || '').toString().toUpperCase();
+  if (code && FIFA_TEAM_CODE_TO_HEBREW[code]) return FIFA_TEAM_CODE_TO_HEBREW[code];
+  const name = fifaText(team?.TeamName || team?.Name || team);
+  if (name && FIFA_TEAM_NAME_TO_HEBREW[name]) return FIFA_TEAM_NAME_TO_HEBREW[name];
+  return name || fifaPlaceholderText(placeholder);
+}
+
+function fifaMatchDateParts(match) {
+  const startsAt = Date.parse(match?.Date || '');
+  if (!Number.isFinite(startsAt)) return {date:'', time:'', startsAt:0};
+  const israelTime = new Date(startsAt + MATCH_TIMEZONE_OFFSET_MINUTES * 60 * 1000);
+  const day = israelTime.getUTCDate();
+  const month = israelTime.getUTCMonth() + 1;
+  const hours = String(israelTime.getUTCHours()).padStart(2, '0');
+  const minutes = String(israelTime.getUTCMinutes()).padStart(2, '0');
+  return {date:`${day}.${month}`, time:`${hours}:${minutes}`, startsAt};
+}
+
+function fifaMatchCenterUrl(match) {
+  if (!match?.IdStage || !match?.IdMatch) return '';
+  return `${FIFA_MATCH_CENTER_BASE_URL}/${encodeURIComponent(match.IdStage)}/${encodeURIComponent(match.IdMatch)}`;
+}
+
+function fifaCalendarResults(payload) {
+  if (Array.isArray(payload?.Results)) return payload.Results;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+function fifaMatchStage(match, officialMatchNumber) {
+  if (FIFA_KNOCKOUT_MATCH_POSITIONS[officialMatchNumber]) return FIFA_KNOCKOUT_MATCH_POSITIONS[officialMatchNumber].stage;
+  const stageName = fifaText(match?.StageName);
+  return FIFA_STAGE_TO_KNOCKOUT_STAGE[stageName] || '';
+}
+
+function fifaScoreValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const score = Number(value);
+  return Number.isFinite(score) ? score : null;
+}
+
+function mapFifaMatchToKnockout(match) {
+  const officialMatchNumber = Number(match?.MatchNumber);
+  const position = FIFA_KNOCKOUT_MATCH_POSITIONS[officialMatchNumber];
+  if (!position) return null;
+  const stage = fifaMatchStage(match, officialMatchNumber);
+  if (!KNOCKOUT_STAGE_LABELS[stage]) return null;
+  const {date, time, startsAt} = fifaMatchDateParts(match);
+  const homeScore = fifaScoreValue(match?.HomeTeamScore);
+  const awayScore = fifaScoreValue(match?.AwayTeamScore);
+  const hasScore = homeScore !== null && awayScore !== null;
+  const now = Date.now();
+  const homeTeam = fifaTeamName(match?.Home, match?.PlaceHolderA);
+  const awayTeam = fifaTeamName(match?.Away, match?.PlaceHolderB);
+  const city = fifaText(match?.CityName || match?.City?.Name);
+  const stadium = fifaText(match?.Stadium?.Name || match?.StadiumName);
+  return {
+    id: `ko_fifa_${match?.IdMatch || officialMatchNumber}`,
+    stage,
+    bracketPosition: position.bracketPosition,
+    date,
+    time,
+    startsAt,
+    homeTeam,
+    awayTeam,
+    hostCity: [city, stadium].filter(Boolean).join(' • '),
+    status: hasScore ? 'scored' : 'open',
+    actualHomeScore: homeScore,
+    actualAwayScore: awayScore,
+    actualWinner: null,
+    advancingTeam: null,
+    winnerId: null,
+    officialSource: 'FIFA',
+    officialMatchNumber,
+    officialMatchId: match?.IdMatch || '',
+    officialStageId: match?.IdStage || '',
+    officialSourceUrl: fifaMatchCenterUrl(match),
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function mapFifaCalendarToKnockoutMatches(payload) {
+  return fifaCalendarResults(payload)
+    .map(mapFifaMatchToKnockout)
+    .filter(Boolean)
+    .sort((a,b) => knockoutStageOrder(a.stage) - knockoutStageOrder(b.stage)
+      || Number(a.bracketPosition ?? 999) - Number(b.bracketPosition ?? 999)
+      || Number(a.officialMatchNumber || 0) - Number(b.officialMatchNumber || 0));
+}
+
 function showKOMatchesPreview(matches) {
   const prev = document.getElementById('koPreview');
   if (!prev) return;
   pendingKOMatchImport = matches;
+  const officialCount = matches.filter(match => match.officialSource === 'FIFA').length;
   prev.innerHTML = `
     <div style="margin-top:16px">
       <h3 style="font-size:15px;font-weight:700;margin-bottom:10px">תצוגה מקדימה — ${matches.length} משחקי נוקאאוט</h3>
+      ${officialCount ? `<div style="font-size:12px;color:var(--text2);font-weight:800;margin-bottom:8px">נטענו ${officialCount} משחקים מהמקור הרשמי של FIFA. מספר המשחק הרשמי קובע את המיקום בבראקט.</div>` : ''}
       <div class="preview-wrapper">
         <table class="preview-table">
-          <thead><tr><th>שלב</th><th>תאריך</th><th>שעה</th><th>בית</th><th>חוץ</th><th>עיר</th></tr></thead>
-          <tbody>${matches.map(m => `<tr><td>${knockoutStageLabel(m.stage)}</td><td>${m.date}</td><td>${m.time}</td><td>${teamText(m.homeTeam)}</td><td>${teamText(m.awayTeam)}</td><td>${escapeHtml(m.hostCity)}</td></tr>`).join('')}</tbody>
+          <thead><tr><th>מקור</th><th>שלב</th><th>תאריך</th><th>שעה</th><th>בית</th><th>חוץ</th><th>עיר</th></tr></thead>
+          <tbody>${matches.map(m => `<tr><td>${m.officialMatchNumber ? `FIFA ${escapeHtml(String(m.officialMatchNumber))}` : 'ידני/CSV'}</td><td>${knockoutStageLabel(m.stage)} ${Number(m.bracketPosition ?? -1) >= 0 ? Number(m.bracketPosition) + 1 : ''}</td><td>${m.date}</td><td>${m.time}</td><td>${teamText(m.homeTeam)}</td><td>${teamText(m.awayTeam)}</td><td>${escapeHtml(m.hostCity)}</td></tr>`).join('')}</tbody>
         </table>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -5506,7 +5735,8 @@ window.clearKOMatchesPreview = function() {
 
 function isKnockoutPlaceholderTeam(team) {
   const value = (team || '').toString().trim().toLowerCase();
-  return !value || value === 'tbd' || value.includes('מנצחת') || value.includes('winner');
+  return !value || value === 'tbd' || value.includes('מנצחת') || value.includes('סגנית')
+    || value.includes('מקום שלישי') || value.includes('מפסידת') || value.includes('winner');
 }
 
 function mergeKnockoutImportedMatches(existing, incoming) {
@@ -5517,7 +5747,25 @@ function mergeKnockoutImportedMatches(existing, incoming) {
 
   incoming.forEach(match => {
     if (match.stage === 'third_place') {
-      extras.push(match);
+      const previousIndex = extras.findIndex(extra => (match.officialMatchNumber && extra.officialMatchNumber === match.officialMatchNumber)
+        || Number(extra.bracketPosition || 0) === Number(match.bracketPosition || 0));
+      if (previousIndex === -1) {
+        extras.push(match);
+        return;
+      }
+      const previous = extras[previousIndex];
+      const previousHome = previous.homeTeam || '';
+      const previousAway = previous.awayTeam || '';
+      const teamsChanged = previousHome && previousAway && (previousHome !== match.homeTeam || previousAway !== match.awayTeam);
+      const merged = {...previous, ...match, id: previous.id || match.id, updatedAt: Date.now()};
+      if (knockoutMatchHasResult(previous) && !teamsChanged) {
+        ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','winnerId','status','scoredAt'].forEach(field => {
+          merged[field] = previous[field];
+        });
+      } else if (teamsChanged) {
+        clearKnockoutMatchResult(merged);
+      }
+      extras[previousIndex] = merged;
       return;
     }
     const key = `${match.stage}:${match.bracketPosition}`;
