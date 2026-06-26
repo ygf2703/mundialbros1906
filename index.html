@@ -1351,10 +1351,12 @@ function mergeDailyBonusActuals(cloudActuals={}, localActuals={}) {
 
 function mergeAppStates(cloudState={}, localState={}) {
   const matches = mergeMatchLists(cloudState.matches, localState.matches);
-  const knockoutMatches = mergeMatchLists(cloudState.knockoutMatches, localState.knockoutMatches);
+  const knockoutMatches = normalizeKnockoutMatchList(mergeMatchLists(cloudState.knockoutMatches, localState.knockoutMatches));
+  const knockoutMatchIds = new Set(knockoutMatches.filter(match => match?.id).map(match => match.id));
   return {
     predictions: mergePredictionLists(cloudState.predictions, localState.predictions, matches),
-    knockoutPredictions: mergePredictionLists(cloudState.knockoutPredictions, localState.knockoutPredictions, knockoutMatches),
+    knockoutPredictions: mergePredictionLists(cloudState.knockoutPredictions, localState.knockoutPredictions, knockoutMatches)
+      .filter(pred => !pred?.matchId || knockoutMatchIds.has(pred.matchId)),
     specialPredictions: mergeSpecialPredictionState(cloudState.specialPredictions, localState.specialPredictions),
     matches,
     knockoutMatches,
@@ -1449,8 +1451,9 @@ async function syncAppStateFromCloud() {
   const merged = mergeAppStates(cloudState, localState);
   const cloudOnly = mergeAppStates(cloudState, {});
   saveLocalAppState(merged);
-  if (JSON.stringify(merged) !== JSON.stringify(cloudOnly) && !appStateLooksEmpty(merged)) {
-    await saveAppStateToCloud(merged);
+  const cloudNeedsCleanup = JSON.stringify(cloudState) !== JSON.stringify(cloudOnly);
+  if ((cloudNeedsCleanup || JSON.stringify(merged) !== JSON.stringify(cloudOnly)) && !appStateLooksEmpty(merged)) {
+    await saveAppStateToCloud(merged, {replace: true});
   }
   return true;
 }
@@ -3265,7 +3268,7 @@ function renderKnockoutStage(stage, stageMatches) {
 }
 
 function renderKnockoutPage() {
-  const storedMatches = loadData('knockoutMatches', []);
+  const storedMatches = normalizeKnockoutMatchList(loadData('knockoutMatches', []));
   const koMatches = sortedKnockoutMatches(storedMatches)
     .filter(m => m && KNOCKOUT_MAIN_STAGES.includes(m.stage));
   const extraMatches = sortedKnockoutMatches(storedMatches)
@@ -3277,13 +3280,13 @@ function renderKnockoutPage() {
   const upcoming = [...koMatches, ...extraMatches]
     .filter(m => !m.isPlaceholder && Number(m.startsAt || 0) > Date.now())
     .sort((a,b) => Number(a.startsAt || 0) - Number(b.startsAt || 0))[0];
-  const nextText = upcoming ? `${knockoutStageLabel(upcoming.stage)} • ${formatDate(upcoming.date)} ${upcoming.time || ''}` : (totalKnown ? 'ממתינים לעדכון' : 'טרם הועלה CSV');
+  const nextText = upcoming ? `${knockoutStageLabel(upcoming.stage)} • ${formatDate(upcoming.date)} ${upcoming.time || ''}` : (totalKnown ? 'ממתינים לעדכון' : 'טרם סונכרן מ-FIFA');
 
   return `
     <div class="knockout-page">
       <section class="knockout-hero">
         <h2>נוקאאוט</h2>
-        <p>הדרך לגביע מתחילה ב־32 הגדולות. המנצחות מתקדמות אוטומטית פנימה עד לגמר ולזוכה במרכז.</p>
+        <p>הדרך לגביע מתחילה ב־32 הגדולות. המשחקים והשיבוצים מגיעים מהמקור הרשמי של FIFA, והמנצחות מתקדמות אוטומטית פנימה עד לגמר.</p>
       </section>
 
       <div class="knockout-kpis">
@@ -5337,9 +5340,8 @@ function knockoutMatchAdminTitle(match) {
 }
 
 function renderAdminKnockout() {
-  const koMatches = sortedKnockoutMatches(loadData('knockoutMatches', []))
+  const koMatches = sortedKnockoutMatches(normalizeKnockoutMatchList(loadData('knockoutMatches', [])))
     .filter(match => !match.isPlaceholder || match.homeTeam || match.awayTeam || match.date || match.time);
-  const stageLabels = KNOCKOUT_STAGE_LABELS;
   
   return `
     <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">⚡ ניהול שלב הנוקאאוט</h2>
@@ -5365,39 +5367,10 @@ function renderAdminKnockout() {
         <div id="koPreview"></div>
       </div>
     </div>
-    
+
     <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><span class="card-title">יצירת משחק נוקאאוט</span></div>
-      <div class="card-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div>
-            <label class="form-label">שלב</label>
-            <select class="form-input" id="ko-stage">
-              ${Object.entries(stageLabels).map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label class="form-label">תאריך</label>
-            <input class="form-input" id="ko-date" placeholder="1.7">
-          </div>
-          <div>
-            <label class="form-label">שעה</label>
-            <input class="form-input" id="ko-time" placeholder="21:00">
-          </div>
-          <div>
-            <label class="form-label">עיר</label>
-            <input class="form-input" id="ko-city" placeholder="ניו יורק">
-          </div>
-          <div>
-            <label class="form-label">קבוצת בית</label>
-            <input class="form-input" id="ko-home" placeholder="מנצחת בית א">
-          </div>
-          <div>
-            <label class="form-label">קבוצת חוץ</label>
-            <input class="form-input" id="ko-away" placeholder="סגנית בית ב">
-          </div>
-        </div>
-        <button class="btn btn-primary btn-full" onclick="addKOMatch()">+ הוסף משחק</button>
+      <div class="card-body" style="font-size:12px;color:var(--text2);font-weight:700">
+        משחקי נוקאאוט לא נוצרים ידנית. אם מופיעות כפילויות ישנות, הרצת הסנכרון מ-FIFA תנקה אותן ותשמור רק את המשחקים הרשמיים.
       </div>
     </div>
     
@@ -5778,6 +5751,12 @@ function pruneUnresolvedFifaMatches(matches) {
     if (!isOfficialKnockoutMatch(match)) return false;
     return knockoutMatchHasRealTeam(match) || knockoutMatchHasResult(match);
   });
+}
+
+function normalizeKnockoutMatchList(matches) {
+  const list = (matches || []).filter(Boolean);
+  if (!list.some(isOfficialKnockoutMatch)) return list;
+  return list.filter(match => isOfficialKnockoutMatch(match) || match.isPlaceholder);
 }
 
 function mergeKnockoutImportedMatches(existing, incoming) {

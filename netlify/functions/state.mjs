@@ -95,14 +95,31 @@ function normalizeSpecials(specials={}) {
   );
 }
 
+function isOfficialKnockoutMatch(match) {
+  return !!(match?.officialSource === 'FIFA' || match?.officialMatchNumber || (match?.id || '').toString().startsWith('ko_fifa_'));
+}
+
+function normalizeKnockoutMatches(matches=[]) {
+  const list = Array.isArray(matches) ? matches.filter(m => m && m.id) : [];
+  if (!list.some(isOfficialKnockoutMatch)) return list;
+  return list.filter(match => isOfficialKnockoutMatch(match) || match.isPlaceholder);
+}
+
+function filterPredictionsForMatches(predictions=[], matches=[]) {
+  const ids = new Set(matches.filter(match => match?.id).map(match => match.id));
+  return (Array.isArray(predictions) ? predictions.filter(Boolean) : [])
+    .filter(pred => !pred?.matchId || ids.has(pred.matchId));
+}
+
 function sanitizeState(input) {
   const source = objectOrEmpty(input);
+  const knockoutMatches = normalizeKnockoutMatches(source.knockoutMatches);
   return {
     predictions: Array.isArray(source.predictions) ? source.predictions.filter(Boolean) : [],
-    knockoutPredictions: Array.isArray(source.knockoutPredictions) ? source.knockoutPredictions.filter(Boolean) : [],
+    knockoutPredictions: filterPredictionsForMatches(source.knockoutPredictions, knockoutMatches),
     specialPredictions: normalizeSpecials(source.specialPredictions),
     matches: Array.isArray(source.matches) ? source.matches.filter(m => m && m.id) : [],
-    knockoutMatches: Array.isArray(source.knockoutMatches) ? source.knockoutMatches.filter(m => m && m.id) : [],
+    knockoutMatches,
     actualGroupWinners: objectOrEmpty(source.actualGroupWinners),
     actualTopScorer: cleanText(source.actualTopScorer),
     actualChampion: cleanText(source.actualChampion),
@@ -384,10 +401,13 @@ function mergeState(existingState, incomingState, replace=false) {
   const incoming = sanitizeState(incomingState || {});
   if (replace) return incoming;
   const matches = mergeMatches(existing.matches, incoming.matches);
-  const knockoutMatches = mergeMatches(existing.knockoutMatches, incoming.knockoutMatches);
+  const knockoutMatches = normalizeKnockoutMatches(mergeMatches(existing.knockoutMatches, incoming.knockoutMatches));
   return {
     predictions: mergePredictions(existing.predictions, incoming.predictions, matches),
-    knockoutPredictions: mergePredictions(existing.knockoutPredictions, incoming.knockoutPredictions, knockoutMatches),
+    knockoutPredictions: filterPredictionsForMatches(
+      mergePredictions(existing.knockoutPredictions, incoming.knockoutPredictions, knockoutMatches),
+      knockoutMatches
+    ),
     specialPredictions: mergeSpecials(existing.specialPredictions, incoming.specialPredictions),
     matches,
     knockoutMatches,
@@ -474,7 +494,9 @@ export const handler = async event => {
     if (event.httpMethod === 'GET') {
       const state = await store.get('state', {type: 'json'});
       const fixed = await applyNoamPredictionFixes(state || defaults, userStore);
-      if (fixed.changed) await store.setJSON('state', fixed.state);
+      if (fixed.changed || JSON.stringify(state || defaults) !== JSON.stringify(fixed.state)) {
+        await store.setJSON('state', fixed.state);
+      }
       return json(200, {state: fixed.state, manualFix: fixed.reason});
     }
 
