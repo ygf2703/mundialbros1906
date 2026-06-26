@@ -2847,6 +2847,7 @@ const KNOCKOUT_MAIN_STAGES = ['round_of_32','round_of_16','quarter_final','semi_
 const KNOCKOUT_STAGE_SLOTS = {round_of_32: 16, round_of_16: 8, quarter_final: 4, semi_final: 2, final: 1};
 const KNOCKOUT_NEXT_STAGE = {round_of_32:'round_of_16', round_of_16:'quarter_final', quarter_final:'semi_final', semi_final:'final'};
 const FIFA_KNOCKOUT_CALENDAR_URL = 'https://api.fifa.com/api/v3/calendar/matches?idCompetition=17&idSeason=285023&count=500&language=en';
+const FIFA_KNOCKOUT_PROXY_URL = '/.netlify/functions/fifa-knockout';
 const FIFA_MATCH_CENTER_BASE_URL = 'https://www.fifa.com/en/match-centre/match/17/285023';
 const FIFA_STAGE_TO_KNOCKOUT_STAGE = {
   'Round of 32': 'round_of_32',
@@ -5351,20 +5352,14 @@ function renderAdminKnockout() {
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><span class="card-title">ייבוא CSV נוקאאוט</span></div>
+      <div class="card-header"><span class="card-title">סנכרון נוקאאוט מ-FIFA הרשמי</span></div>
       <div class="card-body">
         <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
-          פורמט מומלץ: שלב, תאריך, שעה, המשחק, עיר מארחת. לדוגמה: 32 הגדולות,29.6,21:00,מנצחת בית א - סגנית בית ב,דאלאס
+          טוען רק משחקים שבהם FIFA כבר שיבץ לפחות נבחרת אחת אמיתית. משחקים שעדיין כוללים רק "מנצחת משחק" או "מקום שלישי" יישארו כ-TBD בבראקט ויתעדכנו בסנכרון הבא.
         </p>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px;border:1px solid rgba(25,67,126,.2);border-radius:var(--radius-sm);background:rgba(13,67,126,.05)">
-          <button class="btn btn-primary btn-sm" onclick="loadFifaKnockoutMatchesPreview()">טען מ-FIFA הרשמי</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;border:1px solid rgba(25,67,126,.2);border-radius:var(--radius-sm);background:rgba(13,67,126,.05)">
+          <button class="btn btn-primary" onclick="syncFifaKnownKnockoutMatches()">סנכרן משחקים משובצים מ-FIFA</button>
           <span style="font-size:12px;color:var(--text2);font-weight:700">מקור רשמי: api.fifa.com. המיקום בבראקט נקבע לפי מספרי המשחקים הרשמיים.</span>
-        </div>
-        <div class="file-drop" id="koFileDrop" style="cursor:pointer">
-          <input type="file" accept=".csv" id="koFileInput" style="display:none">
-          <div class="file-drop-icon">📁</div>
-          <div class="file-drop-text">לחץ לבחירת קובץ CSV נוקאאוט</div>
-          <div class="file-drop-hint">שלבים נתמכים: 32 הגדולות, שמינית גמר, רבע גמר, חצי גמר, גמר, מקום שלישי</div>
         </div>
         <div id="koUploadError"></div>
         <div id="koPreview"></div>
@@ -5473,20 +5468,27 @@ function processKOMatchesFile(file) {
   reader.readAsText(file, 'UTF-8');
 }
 
-window.loadFifaKnockoutMatchesPreview = async function() {
+window.syncFifaKnownKnockoutMatches = async function() {
   const errorEl = document.getElementById('koUploadError');
   const previewEl = document.getElementById('koPreview');
   if (errorEl) errorEl.innerHTML = '';
-  if (previewEl) previewEl.innerHTML = '<div style="margin-top:12px;font-size:13px;color:var(--text2);font-weight:800">טוען משחקים מהמקור הרשמי של FIFA...</div>';
+  if (previewEl) previewEl.innerHTML = '<div style="margin-top:12px;font-size:13px;color:var(--text2);font-weight:800">מסנכרן משחקים משובצים מהמקור הרשמי של FIFA...</div>';
   try {
-    const response = await fetch(FIFA_KNOCKOUT_CALENDAR_URL, {headers:{Accept:'application/json'}});
-    if (!response.ok) throw new Error(`FIFA החזיר שגיאה ${response.status}`);
-    const payload = await response.json();
-    const matches = mapFifaCalendarToKnockoutMatches(payload);
-    if (!matches.length) throw new Error('לא נמצאו משחקי נוקאאוט במענה הרשמי של FIFA');
+    const payload = await fetchFifaKnockoutCalendar();
+    const matches = mapFifaCalendarToKnockoutMatches(payload, {knownTeamsOnly:true});
+    if (!matches.length) throw new Error('לא נמצאו עדיין משחקי נוקאאוט עם נבחרת משובצת במענה הרשמי של FIFA');
+    const existing = pruneUnresolvedFifaMatches(loadData('knockoutMatches', []).filter(isOfficialKnockoutMatch));
+    const merged = mergeKnockoutImportedMatches(existing, matches);
+    const rebuilt = rebuildKnockoutProgression(merged, {createMissing:true});
+    const invalidated = new Set(rebuilt.invalidatedMatchIds);
+    const currentPredictions = loadData('knockoutPredictions', []);
+    const predictions = currentPredictions.filter(pred => !invalidated.has(pred.matchId));
+    saveData('knockoutMatches', rebuilt.matches);
+    if (predictions.length !== currentPredictions.length) saveData('knockoutPredictions', predictions);
     if (errorEl) errorEl.innerHTML = '';
-    showKOMatchesPreview(matches);
-    showToast(`נטענו ${matches.length} משחקים מ-FIFA הרשמי`);
+    const keys = predictions.length !== currentPredictions.length ? ['knockoutMatches','knockoutPredictions'] : ['knockoutMatches'];
+    await showStateSaveToast(`סונכרנו ${matches.length} משחקים משובצים מ-FIFA הרשמי`, 'נשמר במכשיר הזה וסונכרן למאגר המרכזי', keys);
+    switchAdminPanel('knockout');
   } catch(err) {
     if (previewEl) previewEl.innerHTML = '';
     if (errorEl) {
@@ -5494,6 +5496,8 @@ window.loadFifaKnockoutMatchesPreview = async function() {
     }
   }
 };
+
+window.loadFifaKnockoutMatchesPreview = window.syncFifaKnownKnockoutMatches;
 
 function csvHeaderIndex(headers, names, fallback) {
   const normalized = headers.map(h => (h || '').toString().trim().toLowerCase());
@@ -5642,10 +5646,31 @@ function fifaCalendarResults(payload) {
   return [];
 }
 
+async function fetchFifaKnockoutCalendar() {
+  const sources = window.location.protocol === 'http:' || window.location.protocol === 'https:'
+    ? [FIFA_KNOCKOUT_PROXY_URL, FIFA_KNOCKOUT_CALENDAR_URL]
+    : [FIFA_KNOCKOUT_CALENDAR_URL];
+  let lastError = null;
+  for (const url of sources) {
+    try {
+      const response = await fetch(url, {headers:{Accept:'application/json'}});
+      if (!response.ok) throw new Error(`${url} החזיר שגיאה ${response.status}`);
+      return await response.json();
+    } catch(err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('טעינת FIFA נכשלה');
+}
+
 function fifaMatchStage(match, officialMatchNumber) {
   if (FIFA_KNOCKOUT_MATCH_POSITIONS[officialMatchNumber]) return FIFA_KNOCKOUT_MATCH_POSITIONS[officialMatchNumber].stage;
   const stageName = fifaText(match?.StageName);
   return FIFA_STAGE_TO_KNOCKOUT_STAGE[stageName] || '';
+}
+
+function fifaMatchHasKnownTeam(match) {
+  return !!(match?.Home?.IdCountry || match?.Away?.IdCountry);
 }
 
 function fifaScoreValue(value) {
@@ -5695,8 +5720,9 @@ function mapFifaMatchToKnockout(match) {
   };
 }
 
-function mapFifaCalendarToKnockoutMatches(payload) {
+function mapFifaCalendarToKnockoutMatches(payload, {knownTeamsOnly=false}={}) {
   return fifaCalendarResults(payload)
+    .filter(match => !knownTeamsOnly || fifaMatchHasKnownTeam(match))
     .map(mapFifaMatchToKnockout)
     .filter(Boolean)
     .sort((a,b) => knockoutStageOrder(a.stage) - knockoutStageOrder(b.stage)
@@ -5712,7 +5738,7 @@ function showKOMatchesPreview(matches) {
   prev.innerHTML = `
     <div style="margin-top:16px">
       <h3 style="font-size:15px;font-weight:700;margin-bottom:10px">תצוגה מקדימה — ${matches.length} משחקי נוקאאוט</h3>
-      ${officialCount ? `<div style="font-size:12px;color:var(--text2);font-weight:800;margin-bottom:8px">נטענו ${officialCount} משחקים מהמקור הרשמי של FIFA. מספר המשחק הרשמי קובע את המיקום בבראקט.</div>` : ''}
+      ${officialCount ? `<div style="font-size:12px;color:var(--text2);font-weight:800;margin-bottom:8px">נטענו ${officialCount} משחקים שבהם FIFA כבר שיבץ לפחות נבחרת אחת. מספר המשחק הרשמי קובע את המיקום בבראקט.</div>` : ''}
       <div class="preview-wrapper">
         <table class="preview-table">
           <thead><tr><th>מקור</th><th>שלב</th><th>תאריך</th><th>שעה</th><th>בית</th><th>חוץ</th><th>עיר</th></tr></thead>
@@ -5737,6 +5763,21 @@ function isKnockoutPlaceholderTeam(team) {
   const value = (team || '').toString().trim().toLowerCase();
   return !value || value === 'tbd' || value.includes('מנצחת') || value.includes('סגנית')
     || value.includes('מקום שלישי') || value.includes('מפסידת') || value.includes('winner');
+}
+
+function knockoutMatchHasRealTeam(match) {
+  return !!match && (!isKnockoutPlaceholderTeam(match.homeTeam) || !isKnockoutPlaceholderTeam(match.awayTeam));
+}
+
+function isOfficialKnockoutMatch(match) {
+  return !!(match?.officialSource === 'FIFA' || match?.officialMatchNumber || (match?.id || '').toString().startsWith('ko_fifa_'));
+}
+
+function pruneUnresolvedFifaMatches(matches) {
+  return (matches || []).filter(match => {
+    if (!isOfficialKnockoutMatch(match)) return false;
+    return knockoutMatchHasRealTeam(match) || knockoutMatchHasResult(match);
+  });
 }
 
 function mergeKnockoutImportedMatches(existing, incoming) {
