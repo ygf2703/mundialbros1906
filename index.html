@@ -374,9 +374,9 @@ const SCORING = {
   correctOutcome: 2,
   topScorer: 10,
   groupWinner: 5,
-  knockoutExact: 7,
-  knockoutOutcome: 3,
-  knockoutAdvancing: 4,
+  knockoutExact: 5,
+  knockoutOutcome: 2,
+  knockoutAdvancing: 1,
   lockMinutes: 30,
   knockoutStageWinner: 3,
   tournamentWinner: 10,
@@ -2023,6 +2023,10 @@ function formatDate(dateStr) {
   return `${day} ${months[parseInt(month)] || ''}`;
 }
 
+function knockoutAdvancingBonusApplies(pred, match) {
+  return !!(pred?.predictedAdvancingTeam && match?.advancingTeam && pred.predictedAdvancingTeam === match.advancingTeam);
+}
+
 function computeScoreForPrediction(pred, match) {
   if (match.status !== 'finished' && match.status !== 'scored') return 0;
   if (scoreNumber(match.actualHomeScore) === null || scoreNumber(match.actualAwayScore) === null) return 0;
@@ -2046,10 +2050,8 @@ function computeScoreForPrediction(pred, match) {
     } else if (isOutcome) {
       score = SCORING.knockoutOutcome;
     }
-    if (!isExact && pred.predictedAdvancingTeam && match.advancingTeam) {
-      if (pred.predictedAdvancingTeam === match.advancingTeam) {
-        score += SCORING.knockoutAdvancing;
-      }
+    if (knockoutAdvancingBonusApplies(pred, match)) {
+      score += SCORING.knockoutAdvancing;
     }
   }
   return score;
@@ -2724,7 +2726,7 @@ function renderRulesPage() {
     ['כיוון נכון בשלב הבתים', `${SCORING.correctOutcome} נקודות`],
     ['תוצאה מדויקת בנוקאאוט', `${SCORING.knockoutExact} נקודות`],
     ['כיוון נכון בנוקאאוט', `${SCORING.knockoutOutcome} נקודות`],
-    ['קבוצה שעולה שלב בנוקאאוט', `${SCORING.knockoutAdvancing} נקודות`],
+    ['קבוצה שעולה שלב בנוקאאוט', 'נקודת בונוס אחת על ניחוש העולה הנכונה'],
     ['מנצחת בית', `${SCORING.groupWinner} נקודות לכל בית`],
     ['מנצחת שלב נוקאאוט מיוחד', `${SCORING.knockoutStageWinner} נקודות`],
     ['מלך השערים', `${SCORING.topScorer} נקודות`],
@@ -3541,7 +3543,7 @@ function knockoutBonusQuestionFromDay(date, matches) {
     }
     return {
       ...base,
-      question: 'האם אחד ממשחקי חצי הגמר יגיע להארכה?',
+      question: 'האם אחד ממשחקי חצי הגמר יסתיים בתיקו אחרי 90 דקות?',
       options: ['כן', 'לא']
     };
   }
@@ -5235,6 +5237,13 @@ window.calcKnockoutStageBonus = async function(stage, keyPrefix, matchCount) {
 // ============================================================
 // ADMIN: KNOCKOUT
 // ============================================================
+function knockoutMatchAdminTitle(match) {
+  const label = knockoutStageLabel(match?.stage);
+  const position = Number(match?.bracketPosition);
+  const slot = KNOCKOUT_STAGE_SLOTS[match?.stage] && Number.isInteger(position) ? ` ${position + 1}` : '';
+  return `${label}${slot}`;
+}
+
 function renderAdminKnockout() {
   const koMatches = sortedKnockoutMatches(loadData('knockoutMatches', []))
     .filter(match => !match.isPlaceholder || match.homeTeam || match.awayTeam || match.date || match.time);
@@ -5244,6 +5253,7 @@ function renderAdminKnockout() {
     <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">⚡ ניהול שלב הנוקאאוט</h2>
 
     <div style="background:var(--yellow-pale);border:1px solid var(--yellow-dark);border-radius:var(--radius);padding:12px;margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-secondary btn-sm" onclick="rebuildKnockoutBracketFromAdmin()">רענן בראקט</button>
       <button class="btn btn-yellow btn-sm" onclick="calcKnockoutStageBonus('round_of_16','r16',16)">חשב בונוס שמינית גמר</button>
       <button class="btn btn-yellow btn-sm" onclick="calcKnockoutStageBonus('quarter_final','qf',8)">חשב בונוס רבע גמר</button>
       <button class="btn btn-yellow btn-sm" onclick="calcKnockoutStageBonus('semi_final','sf',4)">חשב בונוס חצי גמר</button>
@@ -5306,7 +5316,7 @@ function renderAdminKnockout() {
     ${koMatches.map(m => `
       <div class="match-card" style="margin-bottom:10px">
         <div class="match-card-header">
-          <span class="match-meta">${stageLabels[m.stage]||m.stage} • ${m.date} ${m.time}</span>
+          <span class="match-meta">${escapeHtml(knockoutMatchAdminTitle(m))} • ${m.date} ${m.time}</span>
           <span class="status-badge ${m.status==='scored'?'status-scored':'status-open'}">${m.status==='scored'?'נוקד':'פתוח'}</span>
         </div>
         <div class="match-body">
@@ -5318,12 +5328,12 @@ function renderAdminKnockout() {
             <span class="score-sep">:</span>
             <input type="number" min="0" class="score-input" style="width:52px" id="kra_${m.id}" value="${m.actualAwayScore??''}" placeholder="0">
             <select class="form-input" style="width:auto;padding:8px;flex:1" id="kradv_${m.id}">
-              <option value="">-- עולה אחרי תיקו / פנדלים --</option>
+              <option value="">-- עולה לבראקט אחרי תיקו ב-90 דקות --</option>
               ${m.homeTeam ? `<option value="${escapeHtml(m.homeTeam)}" ${(m.winnerId||m.advancingTeam)===m.homeTeam?'selected':''}>${teamText(m.homeTeam)}</option>` : ''}
               ${m.awayTeam ? `<option value="${escapeHtml(m.awayTeam)}" ${(m.winnerId||m.advancingTeam)===m.awayTeam?'selected':''}>${teamText(m.awayTeam)}</option>` : ''}
             </select>
           </div>
-          <div style="font-size:11px;color:var(--text3);margin-top:7px">ללא תיקו המנצחת מחושבת אוטומטית. בתיקו חובה לבחור עולה.</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:7px">הזן תוצאת 90 דקות. ללא תיקו המנצחת מחושבת אוטומטית. בתיקו חובה לבחור עולה לבראקט; ניחוש עולה נכון שווה נקודת בונוס אחת.</div>
           <div style="display:flex;gap:8px;margin-top:10px">
             <button class="btn btn-primary btn-sm" onclick="saveKOResult('${m.id}')">שמור תוצאה</button>
             <button class="btn btn-yellow btn-sm" onclick="calcKOMatch('${m.id}')">חשב ניקוד</button>
@@ -5596,6 +5606,19 @@ window.deleteKOMatch = async function(id) {
   switchAdminPanel('knockout');
 };
 
+window.rebuildKnockoutBracketFromAdmin = async function() {
+  const kms = loadData('knockoutMatches', []);
+  const rebuilt = rebuildKnockoutProgression(kms, {createMissing:true});
+  const invalidated = new Set(rebuilt.invalidatedMatchIds);
+  const currentPredictions = loadData('knockoutPredictions', []);
+  const koPredictions = currentPredictions.filter(pred => !invalidated.has(pred.matchId));
+  saveData('knockoutMatches', rebuilt.matches);
+  if (invalidated.size) saveData('knockoutPredictions', koPredictions);
+  const keys = invalidated.size ? ['knockoutMatches','knockoutPredictions'] : ['knockoutMatches'];
+  await showStateSaveToast('✅ הבראקט נבנה מחדש', 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', keys);
+  switchAdminPanel('knockout');
+};
+
 window.saveKOResult = async function(id) {
   const h = parseInt(document.getElementById('krh_'+id)?.value);
   const a = parseInt(document.getElementById('kra_'+id)?.value);
@@ -5606,7 +5629,7 @@ window.saveKOResult = async function(id) {
   if (!m) return;
   if (!m.homeTeam || !m.awayTeam) { showToast('הקבוצות למשחק עדיין לא נקבעו'); return; }
   const winner = determineKnockoutWinner(m, h, a, adv);
-  if (!winner) { showToast('בתיקו יש לבחור מי עלתה אחרי הארכה או פנדלים'); return; }
+  if (!winner) { showToast('בתיקו ב-90 דקות יש לבחור מי עלתה לבראקט'); return; }
   m.actualHomeScore=h; m.actualAwayScore=a; m.actualWinner=getOutcome(h,a);
   m.advancingTeam=winner; m.winnerId=winner; m.status='finished'; m.updatedAt=Date.now();
   const rebuilt = rebuildKnockoutProgression(kms, {createMissing:true});
@@ -5638,7 +5661,7 @@ window.calcKOMatch = async function(id) {
     let s = 0;
     if (isExact) s = SCORING.knockoutExact;
     else if (isOut) s = SCORING.knockoutOutcome;
-    if (!isExact && pred.predictedAdvancingTeam && pred.predictedAdvancingTeam===m.advancingTeam) s += SCORING.knockoutAdvancing;
+    if (knockoutAdvancingBonusApplies(pred, m)) s += SCORING.knockoutAdvancing;
     pred.scoreAwarded=s; pred.isExact=isExact; pred.isOutcomeCorrect=isOut;
     user.totalScore=(user.totalScore||0)+s;
     if (isExact) user.exactCount=(user.exactCount||0)+1;
@@ -5648,8 +5671,11 @@ window.calcKOMatch = async function(id) {
   kms[kmIdx].status='scored';
   kms[kmIdx].scoredAt=Date.now();
   kms[kmIdx].updatedAt=kms[kmIdx].scoredAt;
-  users = usersWithDerivedScores(users, {knockoutMatches: kms, knockoutPredictions: preds});
-  saveData('knockoutMatches',kms);
+  const rebuilt = rebuildKnockoutProgression(kms, {createMissing:true});
+  const invalidated = new Set(rebuilt.invalidatedMatchIds);
+  if (invalidated.size) preds = preds.filter(pred => !invalidated.has(pred.matchId));
+  users = usersWithDerivedScores(users, {knockoutMatches: rebuilt.matches, knockoutPredictions: preds});
+  saveData('knockoutMatches',rebuilt.matches);
   saveData('knockoutPredictions',preds);
   saveData('users',users,{skipCloud:true});
   await saveAppStateToCloud(getLocalAppState(['knockoutMatches','knockoutPredictions']));
