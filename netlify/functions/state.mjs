@@ -116,7 +116,7 @@ function sanitizeState(input) {
   const knockoutMatches = normalizeKnockoutMatches(source.knockoutMatches);
   return {
     predictions: Array.isArray(source.predictions) ? source.predictions.filter(Boolean) : [],
-    knockoutPredictions: filterPredictionsForMatches(source.knockoutPredictions, knockoutMatches),
+    knockoutPredictions: Array.isArray(source.knockoutPredictions) ? source.knockoutPredictions.filter(Boolean) : [],
     specialPredictions: normalizeSpecials(source.specialPredictions),
     matches: Array.isArray(source.matches) ? source.matches.filter(m => m && m.id) : [],
     knockoutMatches,
@@ -399,7 +399,12 @@ function mergeDailyBonusActuals(existing={}, incoming={}) {
 function mergeState(existingState, incomingState, replace=false) {
   const existing = sanitizeState(existingState || defaults);
   const incoming = sanitizeState(incomingState || {});
-  if (replace) return incoming;
+  if (replace) {
+    return {
+      ...incoming,
+      knockoutPredictions: filterPredictionsForMatches(incoming.knockoutPredictions, incoming.knockoutMatches)
+    };
+  }
   const matches = mergeMatches(existing.matches, incoming.matches);
   const knockoutMatches = normalizeKnockoutMatches(mergeMatches(existing.knockoutMatches, incoming.knockoutMatches));
   return {

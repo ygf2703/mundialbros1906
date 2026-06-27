@@ -1766,8 +1766,9 @@ function predictionMatchesExpected(pred, expected={}) {
   return true;
 }
 
-async function savePredictionStateAndVerify({storageKey, matchId, expected, successMessage, fallbackMessage, unsavedKey}) {
-  const stateSaved = await saveAppStateToCloud(getLocalAppState([storageKey]));
+async function savePredictionStateAndVerify({storageKey, matchId, expected, successMessage, fallbackMessage, unsavedKey, stateKeys}) {
+  const keys = Array.isArray(stateKeys) && stateKeys.length ? stateKeys : [storageKey];
+  const stateSaved = await saveAppStateToCloud(getLocalAppState(keys));
   const persisted = loadData(storageKey, []).find(p => p.userId === currentUser.id && p.matchId === matchId);
   if (stateSaved && !predictionMatchesExpected(persisted, expected)) {
     if (unsavedKey) clearUnsavedPrediction(unsavedKey);
@@ -3582,7 +3583,8 @@ window.saveKOPrediction = async function(matchId) {
     expected: {predictedHomeScore: h, predictedAwayScore: a, predictedAdvancingTeam: adv},
     successMessage: '✅ ניחוש נוקאאוט נשמר!',
     fallbackMessage: '✅ ניחוש נוקאאוט נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע',
-    unsavedKey: 'ko:' + matchId
+    unsavedKey: 'ko:' + matchId,
+    stateKeys: ['knockoutPredictions','knockoutMatches']
   });
   refreshPredictionViewsIfClean();
 };
