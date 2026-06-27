@@ -1738,6 +1738,26 @@ async function getFreshEditableMatch(matchId, collectionKey='matches', unsavedKe
   return freshMatch;
 }
 
+function knockoutPredictionCanBeChanged(match, unsavedKey='') {
+  const finalized = match?.status === 'finished' || match?.status === 'scored';
+  if (!match || finalized || matchIsLocked(match) || !knockoutMatchReadyForPrediction(match)) {
+    if (unsavedKey) clearUnsavedPrediction(unsavedKey);
+    showToast(matchPredictionLockedMessage(), 4200);
+    refreshPredictionViewsIfClean();
+    return false;
+  }
+  return true;
+}
+
+async function getFreshEditableKnockoutMatch(matchId, unsavedKey='') {
+  const currentMatch = loadData('knockoutMatches', []).find(m => m.id === matchId);
+  if (!knockoutPredictionCanBeChanged(currentMatch, unsavedKey)) return null;
+  if (shouldUseCloudState()) await syncAppStateFromCloud();
+  const freshMatch = loadData('knockoutMatches', []).find(m => m.id === matchId);
+  if (!knockoutPredictionCanBeChanged(freshMatch, unsavedKey)) return null;
+  return freshMatch;
+}
+
 function predictionMatchesExpected(pred, expected={}) {
   if (!pred) return false;
   if (scoreNumber(pred.predictedHomeScore) !== Number(expected.predictedHomeScore)) return false;
@@ -3285,7 +3305,7 @@ function knockoutMatchReadyForPrediction(match) {
 }
 
 function knockoutPredictionsAreOpen() {
-  return Date.now() >= KNOCKOUT_PREDICTIONS_OPEN_AT;
+  return true;
 }
 
 function knockoutPredictionsOpenMessage() {
@@ -3531,7 +3551,7 @@ window.saveKOPrediction = async function(matchId) {
   const aEl = document.getElementById('ka_'+matchId);
   const advEl = document.getElementById('kadv_'+matchId);
   if (!hEl || !aEl) return;
-  const match = await getFreshEditableMatch(matchId, 'knockoutMatches', 'ko:' + matchId);
+  const match = await getFreshEditableKnockoutMatch(matchId, 'ko:' + matchId);
   if (!match) return;
 
   const hv = hEl.value.trim(), av = aEl.value.trim();
@@ -3573,7 +3593,7 @@ window.autoSaveKOPred = function(matchId) {
     return;
   }
   const match = loadData('knockoutMatches',[]).find(m => m.id === matchId);
-  if (!predictionCanBeChanged(match, 'ko:' + matchId)) return;
+  if (!knockoutPredictionCanBeChanged(match, 'ko:' + matchId)) return;
   markUnsavedPrediction('ko:' + matchId);
 };
 
