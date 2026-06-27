@@ -2851,6 +2851,8 @@ const KNOCKOUT_STAGE_LABELS = {
 const KNOCKOUT_MAIN_STAGES = ['round_of_32','round_of_16','quarter_final','semi_final','final'];
 const KNOCKOUT_STAGE_SLOTS = {round_of_32: 16, round_of_16: 8, quarter_final: 4, semi_final: 2, final: 1};
 const KNOCKOUT_NEXT_STAGE = {round_of_32:'round_of_16', round_of_16:'quarter_final', quarter_final:'semi_final', semi_final:'final'};
+const KNOCKOUT_PREDICTIONS_OPEN_AT = Date.UTC(2026, 5, 27, 20, 0) - (MATCH_TIMEZONE_OFFSET_MINUTES * 60 * 1000);
+const KNOCKOUT_PREDICTIONS_OPEN_LABEL = '27.6 בשעה 20:00';
 const FIFA_KNOCKOUT_CALENDAR_URL = 'https://api.fifa.com/api/v3/calendar/matches?idCompetition=17&idSeason=285023&count=500&language=en';
 const FIFA_KNOCKOUT_PROXY_URL = '/.netlify/functions/fifa-knockout';
 const FIFA_MATCH_CENTER_BASE_URL = 'https://www.fifa.com/en/match-centre/match/17/285023';
@@ -3282,10 +3284,19 @@ function knockoutMatchReadyForPrediction(match) {
     && (KNOCKOUT_MAIN_STAGES.includes(match.stage) || match.stage === 'third_place');
 }
 
+function knockoutPredictionsAreOpen() {
+  return Date.now() >= KNOCKOUT_PREDICTIONS_OPEN_AT;
+}
+
+function knockoutPredictionsOpenMessage() {
+  return `ניחושי הנוקאאוט ייפתחו ב-${KNOCKOUT_PREDICTIONS_OPEN_LABEL}`;
+}
+
 function renderKnockoutPredictionCard(match, prediction) {
+  const koOpen = knockoutPredictionsAreOpen();
   const locked = matchIsLocked(match);
   const finalized = match.status === 'scored' || match.status === 'finished';
-  const disabled = locked || finalized;
+  const disabled = !koOpen || locked || finalized;
   const saved = predictionHasSavedPick(prediction);
   const hv = prediction?.predictedHomeScore !== null && prediction?.predictedHomeScore !== undefined ? prediction.predictedHomeScore : '';
   const av = prediction?.predictedAwayScore !== null && prediction?.predictedAwayScore !== undefined ? prediction.predictedAwayScore : '';
@@ -3294,6 +3305,7 @@ function renderKnockoutPredictionCard(match, prediction) {
   const meta = [formatDate(match.date), match.time, match.hostCity].filter(Boolean).join(' • ');
   let statusBadge = '';
   if (finalized) statusBadge = '<span class="status-badge status-scored">חושב ניקוד</span>';
+  else if (!koOpen) statusBadge = '<span class="status-badge status-locked">ייפתח ב-20:00</span>';
   else if (locked) statusBadge = '<span class="status-badge status-locked">🔒 נעול</span>';
   else if (saved) statusBadge = '<span class="status-badge status-saved">✓ נשמר</span>';
   else statusBadge = '<span class="status-badge status-open">פתוח</span>';
@@ -3333,7 +3345,7 @@ function renderKnockoutPredictionCard(match, prediction) {
             ${resultBadge}
           </div>` : ''}
         <div class="match-footer">
-          <div style="font-size:11px;color:var(--text3)">${saved ? '✅ ניחוש שמור' : (locked ? 'לא ניחשת' : '')}</div>
+          <div style="font-size:11px;color:var(--text3)">${saved ? '✅ ניחוש שמור' : (!koOpen ? knockoutPredictionsOpenMessage() : (locked ? 'לא ניחשת' : ''))}</div>
           ${!disabled ? `<button class="btn btn-primary btn-sm" type="button" onclick="saveKOPrediction('${match.id}')">${saved ? 'עדכן' : 'שמור'}</button>` : ''}
         </div>
       </div>
@@ -3345,6 +3357,7 @@ function renderKnockoutPredictionsSection(matches) {
     .filter(knockoutMatchReadyForPrediction)
     .sort((a,b) => Number(a.startsAt || Infinity) - Number(b.startsAt || Infinity));
   const koPreds = loadData('knockoutPredictions', []).filter(pred => pred.userId === currentUser?.id);
+  const koOpen = knockoutPredictionsAreOpen();
   if (!predictionMatches.length) {
     return `
       <section>
@@ -3372,6 +3385,7 @@ function renderKnockoutPredictionsSection(matches) {
         <span>↗ כיוון נכון = <strong style="color:white">${SCORING.knockoutOutcome} נק'</strong></span>
         <span>🏁 עולה נכונה = <strong style="color:white">${SCORING.knockoutAdvancing} נק'</strong></span>
       </div>
+      ${!koOpen ? `<div class="form-error" style="margin-bottom:12px">${knockoutPredictionsOpenMessage()}. המשחקים עם שתי יריבות ידועות כבר מוצגים כאן, והניחוש ייפתח אוטומטית בשעה הזו.</div>` : ''}
       ${Object.entries(byDate).map(([date, dayMatches]) => `
         <div style="font-size:13px;font-weight:700;color:var(--text2);margin:16px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--blue-pale)">${date.includes('.') ? formatDate(date) : escapeHtml(date)}</div>
         ${dayMatches.map(match => renderKnockoutPredictionCard(match, koPreds.find(pred => pred.matchId === match.id))).join('')}
@@ -3509,6 +3523,10 @@ function renderPredictions() {
 function bindPredictions() {}
 
 window.saveKOPrediction = async function(matchId) {
+  if (!knockoutPredictionsAreOpen()) {
+    showToast(knockoutPredictionsOpenMessage(), 4200);
+    return;
+  }
   const hEl = document.getElementById('kh_'+matchId);
   const aEl = document.getElementById('ka_'+matchId);
   const advEl = document.getElementById('kadv_'+matchId);
@@ -3550,6 +3568,10 @@ window.saveKOPrediction = async function(matchId) {
 };
 
 window.autoSaveKOPred = function(matchId) {
+  if (!knockoutPredictionsAreOpen()) {
+    clearUnsavedPrediction('ko:' + matchId);
+    return;
+  }
   const match = loadData('knockoutMatches',[]).find(m => m.id === matchId);
   if (!predictionCanBeChanged(match, 'ko:' + matchId)) return;
   markUnsavedPrediction('ko:' + matchId);
