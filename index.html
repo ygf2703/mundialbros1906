@@ -5815,6 +5815,10 @@ function fifaScoreValue(value) {
   return Number.isFinite(score) ? score : null;
 }
 
+function fifaMatchHasScore(match) {
+  return fifaScoreValue(match?.HomeTeamScore) !== null && fifaScoreValue(match?.AwayTeamScore) !== null;
+}
+
 function mapFifaMatchToKnockout(match) {
   const officialMatchNumber = Number(match?.MatchNumber);
   const position = FIFA_KNOCKOUT_MATCH_POSITIONS[officialMatchNumber];
@@ -5851,6 +5855,7 @@ function mapFifaMatchToKnockout(match) {
     officialMatchId: match?.IdMatch || '',
     officialStageId: match?.IdStage || '',
     officialSourceUrl: fifaMatchCenterUrl(match),
+    officialHasScore: fifaMatchHasScore(match),
     createdAt: now,
     updatedAt: now
   };
@@ -5909,6 +5914,10 @@ function isOfficialKnockoutMatch(match) {
   return !!(match?.officialSource === 'FIFA' || match?.officialMatchNumber || (match?.id || '').toString().startsWith('ko_fifa_'));
 }
 
+function incomingOfficialMatchClearsResult(match) {
+  return match?.officialSource === 'FIFA' && match.officialHasScore === false;
+}
+
 function pruneUnresolvedFifaMatches(matches) {
   return (matches || []).filter(match => {
     if (!isOfficialKnockoutMatch(match)) return false;
@@ -5941,7 +5950,9 @@ function mergeKnockoutImportedMatches(existing, incoming) {
       const previousAway = previous.awayTeam || '';
       const teamsChanged = previousHome && previousAway && (previousHome !== match.homeTeam || previousAway !== match.awayTeam);
       const merged = {...previous, ...match, id: previous.id || match.id, updatedAt: Date.now()};
-      if (knockoutMatchHasResult(previous) && !teamsChanged) {
+      if (incomingOfficialMatchClearsResult(match)) {
+        clearKnockoutMatchResult(merged);
+      } else if (knockoutMatchHasResult(previous) && !teamsChanged) {
         ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','winnerId','status','scoredAt'].forEach(field => {
           merged[field] = previous[field];
         });
@@ -5973,7 +5984,9 @@ function mergeKnockoutImportedMatches(existing, incoming) {
       isPlaceholder: false,
       updatedAt: Date.now()
     };
-    if (knockoutMatchHasResult(previous) && !teamsChanged) {
+    if (incomingOfficialMatchClearsResult(match)) {
+      clearKnockoutMatchResult(merged);
+    } else if (knockoutMatchHasResult(previous) && !teamsChanged) {
       ['actualHomeScore','actualAwayScore','actualWinner','advancingTeam','winnerId','status','scoredAt'].forEach(field => {
         merged[field] = previous[field];
       });
