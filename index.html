@@ -5501,7 +5501,7 @@ function knockoutMatchAdminTitle(match) {
 
 function renderAdminKnockout() {
   const koMatches = sortedKnockoutMatches(normalizeKnockoutMatchList(loadData('knockoutMatches', [])))
-    .filter(match => !match.isPlaceholder || match.homeTeam || match.awayTeam || match.date || match.time);
+    .filter(match => isOfficialKnockoutMatch(match) && !match.isPlaceholder);
   
   return `
     <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">⚡ ניהול שלב הנוקאאוט</h2>
@@ -5530,7 +5530,7 @@ function renderAdminKnockout() {
 
     <div class="card" style="margin-bottom:16px">
       <div class="card-body" style="font-size:12px;color:var(--text2);font-weight:700">
-        משחקי נוקאאוט לא נוצרים ידנית. אם מופיעות כפילויות ישנות, הרצת הסנכרון מ-FIFA תנקה אותן ותשמור רק את המשחקים הרשמיים.
+        משחקי נוקאאוט לא נוצרים ידנית. מסך הניהול מציג רק משחקים רשמיים מ-FIFA; משחקי המשך אוטומטיים יופיעו בבראקט בלבד עד ש-FIFA יאשר את המשחק הרשמי.
       </div>
     </div>
     
@@ -5610,12 +5610,15 @@ window.syncFifaKnownKnockoutMatches = async function() {
     const payload = await fetchFifaKnockoutCalendar();
     const matches = mapFifaCalendarToKnockoutMatches(payload, {knownTeamsOnly:true});
     if (!matches.length) throw new Error('לא נמצאו עדיין משחקי נוקאאוט עם נבחרת משובצת במענה הרשמי של FIFA');
-    const existing = pruneUnresolvedFifaMatches(loadData('knockoutMatches', []).filter(isOfficialKnockoutMatch));
+    const incomingOfficialNumbers = new Set(matches.map(match => Number(match.officialMatchNumber)).filter(Number.isFinite));
+    const existing = pruneUnresolvedFifaMatches(loadData('knockoutMatches', [])
+      .filter(match => isOfficialKnockoutMatch(match) && incomingOfficialNumbers.has(Number(match.officialMatchNumber))));
     const merged = mergeKnockoutImportedMatches(existing, matches);
     const rebuilt = rebuildKnockoutProgression(merged, {createMissing:true});
     const invalidated = new Set(rebuilt.invalidatedMatchIds);
+    const validMatchIds = new Set(rebuilt.matches.filter(match => match?.id).map(match => match.id));
     const currentPredictions = loadData('knockoutPredictions', []);
-    const predictions = currentPredictions.filter(pred => !invalidated.has(pred.matchId));
+    const predictions = currentPredictions.filter(pred => validMatchIds.has(pred.matchId) && !invalidated.has(pred.matchId));
     saveData('knockoutMatches', rebuilt.matches);
     if (predictions.length !== currentPredictions.length) saveData('knockoutPredictions', predictions);
     if (errorEl) errorEl.innerHTML = '';
