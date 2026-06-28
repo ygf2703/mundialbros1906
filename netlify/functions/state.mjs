@@ -50,6 +50,12 @@ const NOAM_PREDICTION_FIXES = [
     marker: 'noam_brazil_haiti_2026_06_20'
   }
 ];
+const NOAM_DAILY_BONUS_FIXES = [
+  {
+    questionId: 'daily_2026_06_24_round3_goals',
+    answer: '\u05de\u05e2\u05dc 75 \u05e9\u05e2\u05e8\u05d9\u05dd'
+  }
+];
 
 function json(statusCode, body) {
   return {statusCode, headers, body: JSON.stringify(body)};
@@ -484,8 +490,34 @@ async function applyNoamPredictionFixes(state, userStore) {
     applied++;
   });
 
-  const reason = applied ? `applied:${applied}` : (missingMatches.length ? `match_not_found:${missingMatches.join(',')}` : 'already_set');
-  return {state: safeState, changed: applied > 0, reason};
+  const userSpecial = normalizeSpecialPredictionKeys(safeState.specialPredictions[user.id]);
+  const dailyBonus = objectOrEmpty(userSpecial.dailyBonus);
+  const dailyBonusTimes = objectOrEmpty(userSpecial.dailyBonusTimes);
+  let dailyBonusApplied = 0;
+  NOAM_DAILY_BONUS_FIXES.forEach(fix => {
+    if (dailyBonus[fix.questionId] === fix.answer && Number(dailyBonusTimes[fix.questionId] || 0) > 0) return;
+    dailyBonus[fix.questionId] = fix.answer;
+    dailyBonusTimes[fix.questionId] = Date.now();
+    dailyBonusApplied++;
+  });
+  if (dailyBonusApplied) {
+    safeState.specialPredictions = {
+      ...safeState.specialPredictions,
+      [user.id]: normalizeSpecialPredictionKeys({
+        ...userSpecial,
+        dailyBonus,
+        dailyBonusTimes
+      })
+    };
+  }
+
+  const changed = applied > 0 || dailyBonusApplied > 0;
+  const reasons = [];
+  if (applied) reasons.push(`predictions_applied:${applied}`);
+  if (dailyBonusApplied) reasons.push(`daily_bonus_applied:${dailyBonusApplied}`);
+  if (!reasons.length && missingMatches.length) reasons.push(`match_not_found:${missingMatches.join(',')}`);
+  const reason = reasons.length ? reasons.join(';') : 'already_set';
+  return {state: safeState, changed, reason};
 }
 
 export const handler = async event => {
