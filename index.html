@@ -3294,10 +3294,8 @@ function renderKnockoutStage(stage, stageMatches) {
 
 function knockoutMatchHasTwoRealTeams(match) {
   return !!match
-    && !!teamFlagCode(match.homeTeam)
-    && !!teamFlagCode(match.awayTeam)
-    && !isKnockoutPlaceholderTeam(match.homeTeam)
-    && !isKnockoutPlaceholderTeam(match.awayTeam);
+    && isKnownKnockoutTeamName(match.homeTeam)
+    && isKnownKnockoutTeamName(match.awayTeam);
 }
 
 function knockoutMatchReadyForPrediction(match) {
@@ -3946,6 +3944,7 @@ function dailyBonusVisibilityRange(question) {
 }
 
 function dailyBonusQuestionVisibleToUser(question, now=Date.now()) {
+  if (question?.source === 'knockout' && !dailyBonusIsLocked(question)) return true;
   const {start, end} = dailyBonusVisibilityRange(question);
   return now >= start && now < end;
 }
