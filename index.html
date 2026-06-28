@@ -2802,7 +2802,7 @@ function renderRulesPage() {
           <ul class="rules-list">
             <li>ניחוש תוצאה למשחק נסגר ${SCORING.lockMinutes} דקות לפני שריקת הפתיחה של אותו משחק.</li>
             <li>שאלות בונוס יומיות נסגרות ${SCORING.lockMinutes} דקות לפני המשחק הראשון של אותו ערב משחקים.</li>
-            <li>שאלות בונוס לשלב ההצלבה נבנות לפי משחקי הנוקאאוט שהוזנו, ויוצגו למשתמשים רק ביום המשחקים הרלוונטי.</li>
+            <li>שאלות בונוס לשלב הנוקאאוט מופיעות במסך הבונוסים כמו שאלות שלב הבתים, וננעלות לפי זמן המשחק או השלב הרלוונטי.</li>
             <li>מלך השערים, אלופת העולם ובונוסי שלב הבתים נסגרים בתאריך ${OPENING_MATCH_BONUS_LOCK_LABEL}.</li>
             <li>הימורי נוקאאוט ובונוסים לפי שלב נסגרים לפני המשחק או השלב הרלוונטי כפי שמופיע במסך.</li>
             <li>אם בוצעו הימורים שלא נשמרו, המערכת תתריע: “בוצעו הימורים שלא נשמרו, שמור לפני יציאה”. ניחוש שלא נשמר לא ייחשב.</li>
@@ -3931,24 +3931,6 @@ function dailyBonusLockText(question) {
   return `נסגר 30 דקות לפני ${question.lockDate} ${question.lockTime}`;
 }
 
-function dailyBonusVisibilityRange(question) {
-  if (question?.source !== 'knockout') return {start: -Infinity, end: Infinity};
-  if (!question?.lockDate || !question?.lockTime) return {start: Infinity, end: -Infinity};
-  const [day, month] = question.lockDate.split('.').map(Number);
-  const [hour, minute] = question.lockTime.split(':').map(Number);
-  if (![day, month, hour].every(Number.isFinite)) return {start: Infinity, end: -Infinity};
-  const displayDayOffset = hour < 6 ? -1 : 0;
-  const start = new Date(2026, month - 1, day + displayDayOffset, 0, 0, 0).getTime();
-  const end = new Date(2026, month - 1, day + 1, 6, 0, 0).getTime();
-  return {start, end};
-}
-
-function dailyBonusQuestionVisibleToUser(question, now=Date.now()) {
-  if (question?.source === 'knockout' && !dailyBonusIsLocked(question)) return true;
-  const {start, end} = dailyBonusVisibilityRange(question);
-  return now >= start && now < end;
-}
-
 function normalizeDailyBonusValue(value) {
   return (value || '')
     .toString()
@@ -3959,9 +3941,7 @@ function normalizeDailyBonusValue(value) {
 function renderDailyBonusPredictions(mySpecial={}) {
   const answers = plainObject(mySpecial.dailyBonus);
   const times = plainObject(mySpecial.dailyBonusTimes);
-  const allDailyBonusQuestions = getDailyBonusQuestions();
-  const dailyBonusQuestions = allDailyBonusQuestions.filter(dailyBonusQuestionVisibleToUser);
-  const hiddenKnockoutCount = allDailyBonusQuestions.filter(question => question.source === 'knockout' && !dailyBonusQuestionVisibleToUser(question)).length;
+  const dailyBonusQuestions = getDailyBonusQuestions();
   const answeredCount = dailyBonusQuestions.filter(q => answers[q.id]).length;
 
   const cards = dailyBonusQuestions.map(question => {
@@ -4014,7 +3994,6 @@ function renderDailyBonusPredictions(mySpecial={}) {
         <span class="winner-chip">${answeredCount}/${dailyBonusQuestions.length} נשמרו</span>
       </div>
       <p style="font-size:12px;color:var(--text3);margin-bottom:12px">שאלות כן/לא שוות ${SCORING.dailyBonus} נקודות. שאלות בחירה מדויקת שוות ${SCORING.dailyBonusExact} נקודות. שאלות עם ניקוד מיוחד מציגות את הערכים בכרטיס.</p>
-      ${hiddenKnockoutCount ? `<p style="font-size:12px;color:var(--blue-light);font-weight:700;margin-bottom:12px">שאלות בונוס שלב ההצלבה מוכנות במערכת ויוצגו כאן רק ביום המשחקים הרלוונטי.</p>` : ''}
       <div class="daily-bonus-grid">${cards}</div>
     </div>`;
 }
