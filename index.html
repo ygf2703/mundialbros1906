@@ -3791,8 +3791,8 @@ function knockoutBonusQuestionFromDay(date, matches) {
     if (players.length >= 3) {
       return {
         ...base,
-        question: `מי מהשחקנים המובילים יכבוש או יבשל ביום ${stageLabel}?`,
-        options: [...players.slice(0, 6), 'אף אחד מהם']
+        question: `מי מהשחקנים המובילים יבקיע הכי הרבה שערים ביום ${stageLabel}?`,
+        options: [...players.slice(0, 6), 'שוויון / אף אחד מהם']
       };
     }
     return {
@@ -3836,8 +3836,8 @@ function knockoutBonusQuestionFromDay(date, matches) {
     if (players.length >= 3) {
       return {
         ...base,
-        question: `מי מהשחקנים הבולטים יכבוש או יבשל ביום ${stageLabel}?`,
-        options: [...players.slice(0, 6), 'אף אחד מהם']
+        question: `מי מהשחקנים הבולטים יבקיע הכי הרבה שערים ביום ${stageLabel}?`,
+        options: [...players.slice(0, 6), 'שוויון / אף אחד מהם']
       };
     }
     if (teams.length >= 3) {
