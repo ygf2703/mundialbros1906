@@ -53,7 +53,7 @@ const NOAM_PREDICTION_FIXES = [
 const NOAM_DAILY_BONUS_FIXES = [
   {
     questionId: 'daily_2026_06_24_round3_goals',
-    answer: '\u05de\u05e2\u05dc 75 \u05e9\u05e2\u05e8\u05d9\u05dd'
+    answer: '\u05de\u05ea\u05d7\u05ea \u05dc-75 \u05e9\u05e2\u05e8\u05d9\u05dd'
   }
 ];
 
