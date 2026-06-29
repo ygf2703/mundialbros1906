@@ -1372,8 +1372,11 @@ function mergeDailyBonusActuals(cloudActuals={}, localActuals={}) {
 
 function mergeAppStates(cloudState={}, localState={}) {
   const matches = mergeMatchLists(cloudState.matches, localState.matches);
+  const mergedKnockoutMatches = clearFutureKnockoutResults(
+    normalizeKnockoutMatchList(mergeMatchLists(cloudState.knockoutMatches, localState.knockoutMatches))
+  );
   const rebuiltKnockout = rebuildKnockoutProgression(
-    normalizeKnockoutMatchList(mergeMatchLists(cloudState.knockoutMatches, localState.knockoutMatches)),
+    mergedKnockoutMatches,
     {createMissing:true}
   );
   const knockoutMatches = normalizeKnockoutMatchList(rebuiltKnockout.matches);
@@ -3150,6 +3153,18 @@ function clearKnockoutMatchResult(match) {
   match.updatedAt = Date.now();
 }
 
+function clearFutureKnockoutResults(matches=[]) {
+  return (matches || []).map(match => {
+    const normalized = normalizeKnockoutMatch(match);
+    if (!normalized || !knockoutMatchHasResult(normalized)) return normalized;
+    const startsAt = getMatchStartTimestamp(normalized);
+    if (!Number.isFinite(startsAt) || startsAt <= Date.now()) return normalized;
+    const clean = {...normalized};
+    clearKnockoutMatchResult(clean);
+    return clean;
+  });
+}
+
 function rebuildKnockoutProgression(matches, {createMissing=true}={}) {
   const model = buildKnockoutBracketModel(matches, {createMissing});
   const invalidatedMatchIds = new Set();
@@ -3763,6 +3778,50 @@ function bonusQuestionDateKey(date) {
   return `2026_${String(parts.month).padStart(2,'0')}_${String(parts.day).padStart(2,'0')}`;
 }
 
+const KNOCKOUT_BONUS_MORNING_CYCLE_CUTOFF_HOUR = 12;
+
+function bonusQuestionDateKeyFromDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return `2026_${String(date.getMonth() + 1).padStart(2,'0')}_${String(date.getDate()).padStart(2,'0')}`;
+}
+
+function bonusQuestionDateLabelFromParts(parts) {
+  if (!parts) return '';
+  return `${parts.day}.${parts.month}`;
+}
+
+function knockoutBonusCycleInfo(match) {
+  const parts = parseBonusQuestionDateParts(match?.date);
+  if (!parts) return null;
+  const timeParts = (match?.time || '').toString().split(':').map(Number);
+  const hour = Number.isFinite(timeParts[0]) ? timeParts[0] : 0;
+  const minute = Number.isFinite(timeParts[1]) ? timeParts[1] : 0;
+  const cycleDate = new Date(2026, parts.month - 1, parts.day, hour, minute);
+  if (hour < KNOCKOUT_BONUS_MORNING_CYCLE_CUTOFF_HOUR) {
+    cycleDate.setDate(cycleDate.getDate() - 1);
+  }
+  return {
+    key: bonusQuestionDateKeyFromDate(cycleDate),
+    matchDateLabel: bonusQuestionDateLabelFromParts(parts)
+  };
+}
+
+function knockoutBonusCycleDateLabel(matches=[]) {
+  const sorted = [...(matches || [])]
+    .filter(match => match?.date)
+    .sort((a,b) => Number(a.startsAt || Infinity) - Number(b.startsAt || Infinity));
+  const firstParts = parseBonusQuestionDateParts(sorted[0]?.date);
+  const lastParts = parseBonusQuestionDateParts(sorted[sorted.length - 1]?.date);
+  if (!firstParts || !lastParts) return sorted[0]?.date || '';
+  if (firstParts.day === lastParts.day && firstParts.month === lastParts.month) {
+    return bonusQuestionDateLabelFromParts(firstParts);
+  }
+  if (firstParts.month === lastParts.month) {
+    return `${firstParts.day}-${lastParts.day}.${firstParts.month}`;
+  }
+  return `${firstParts.day}.${firstParts.month}-${lastParts.day}.${lastParts.month}`;
+}
+
 function isKnownKnockoutTeamName(team) {
   const value = (team || '').toString().trim();
   if (!value || isKnockoutPlaceholderTeam(value)) return false;
@@ -3792,14 +3851,14 @@ function knockoutBonusStageSummary(matches) {
   return uniqueValues((matches || []).map(match => knockoutStageLabel(match.stage))).join(' / ') || 'נוקאאוט';
 }
 
-function knockoutBonusQuestionFromDay(date, matches) {
+function knockoutBonusQuestionFromDay(date, matches, dateKeyOverride='') {
   const mainMatches = sortedKnockoutMatches(matches)
     .filter(match => match && KNOCKOUT_MAIN_STAGES.includes(match.stage) && !match.isPlaceholder);
   if (!mainMatches.length) return null;
 
   const firstMatch = [...mainMatches]
     .sort((a,b) => Number(a.startsAt || Infinity) - Number(b.startsAt || Infinity))[0];
-  const dateKey = bonusQuestionDateKey(date);
+  const dateKey = dateKeyOverride || bonusQuestionDateKey(date);
   if (!dateKey || !firstMatch.time) return null;
 
   const stage = firstMatch.stage;
@@ -3813,9 +3872,9 @@ function knockoutBonusQuestionFromDay(date, matches) {
     id: `ko_daily_${dateKey}`,
     source: 'knockout',
     dateLabel: `הצלבה • ${date} • ${stageSummary}`,
-    lockDate: date,
+    lockDate: firstMatch.date || date,
     lockTime: firstMatch.time,
-    scoringNote: `שאלת בונוס יומית לשלב ${stageSummary}. נסגרת לפי המשחק הראשון של אותו יום.`
+    scoringNote: `שאלת בונוס יומית לשלב ${stageSummary}. מחזור בונוס כולל ערב ובוקר, ונסגר לפי המשחק הראשון של אותו מחזור.`
   };
 
   if (stage === 'final') {
@@ -3899,20 +3958,25 @@ function knockoutBonusQuestionFromDay(date, matches) {
 }
 
 function buildKnockoutBonusQuestions(matches=loadData('knockoutMatches', [])) {
-  const byDate = new Map();
+  const byCycle = new Map();
   sortedKnockoutMatches(matches || [])
     .filter(match => match && !match.isPlaceholder && KNOCKOUT_MAIN_STAGES.includes(match.stage) && match.date && match.time)
     .forEach(match => {
-      const key = bonusQuestionDateKey(match.date);
-      if (!key) return;
-      if (!byDate.has(key)) byDate.set(key, []);
-      byDate.get(key).push(match);
+      const cycle = knockoutBonusCycleInfo(match);
+      if (!cycle?.key) return;
+      if (!byCycle.has(cycle.key)) byCycle.set(cycle.key, []);
+      byCycle.get(cycle.key).push(match);
     });
 
-  return [...byDate.values()]
-    .map(dayMatches => {
-      const sorted = sortedKnockoutMatches(dayMatches);
-      return knockoutBonusQuestionFromDay(sorted[0]?.date, sorted);
+  return [...byCycle.entries()]
+    .sort(([, a], [, b]) => {
+      const firstA = sortedKnockoutMatches(a)[0];
+      const firstB = sortedKnockoutMatches(b)[0];
+      return Number(firstA?.startsAt || Infinity) - Number(firstB?.startsAt || Infinity);
+    })
+    .map(([cycleKey, cycleMatches]) => {
+      const sorted = sortedKnockoutMatches(cycleMatches);
+      return knockoutBonusQuestionFromDay(knockoutBonusCycleDateLabel(sorted), sorted, cycleKey);
     })
     .filter(Boolean);
 }
@@ -5582,6 +5646,7 @@ function renderAdminKnockout() {
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:7px">הזן תוצאת 90 דקות. ללא תיקו המנצחת מחושבת אוטומטית. בתיקו חובה לבחור עולה לבראקט; ניחוש עולה נכון שווה נקודת בונוס אחת.</div>
           <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-secondary btn-sm" onclick="clearKOResult('${m.id}')">נקה תוצאה</button>
             <button class="btn btn-primary btn-sm" onclick="saveKOResult('${m.id}')">שמור תוצאה</button>
             <button class="btn btn-yellow btn-sm" onclick="calcKOMatch('${m.id}')">חשב ניקוד</button>
             <button class="btn btn-danger btn-sm" onclick="deleteKOMatch('${m.id}')">מחק</button>
@@ -6116,6 +6181,35 @@ window.saveKOResult = async function(id) {
   if (invalidated.size) saveData('knockoutPredictions',koPredictions);
   const keys = invalidated.size ? ['knockoutMatches','knockoutPredictions'] : ['knockoutMatches'];
   await showStateSaveToast(`✅ תוצאה נשמרה · ${winner} עלתה`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', keys);
+  switchAdminPanel('knockout');
+};
+
+window.clearKOResult = async function(id) {
+  const kms = loadData('knockoutMatches', []);
+  const match = kms.find(x => x.id === id);
+  if (!match) return;
+  const approved = await confirmAppAction({
+    title: 'ניקוי תוצאת נוקאאוט',
+    message: `לנקות את התוצאה והעולה לבראקט עבור ${teamText(match.homeTeam)} נגד ${teamText(match.awayTeam)}? המשחק יישאר בשלב הנוכחי, והשלבים הבאים ינוקו.`,
+    confirmLabel: 'נקה תוצאה'
+  });
+  if (!approved) return;
+  clearKnockoutMatchResult(match);
+  match.updatedAt = Date.now();
+  const rebuilt = rebuildKnockoutProgression(kms, {createMissing:true});
+  const invalidated = new Set(rebuilt.invalidatedMatchIds);
+  const koPredictions = loadData('knockoutPredictions', [])
+    .filter(pred => !invalidated.has(pred.matchId))
+    .map(pred => pred.matchId === id ? resetPredictionScore(pred) : pred);
+  let users = loadData('users', []);
+  users = usersWithDerivedScores(users, {knockoutMatches: rebuilt.matches, knockoutPredictions: koPredictions});
+  saveData('knockoutMatches', rebuilt.matches);
+  saveData('knockoutPredictions', koPredictions);
+  saveData('users', users, {skipCloud:true});
+  const stateSaved = await saveAppStateToCloud(getLocalAppState(['knockoutMatches','knockoutPredictions']));
+  const usersSaved = await saveUsersToCloud(users, {replace:true});
+  const cloudOk = (stateSaved && usersSaved) || (!shouldUseCloudState() && !shouldUseCloudUsers());
+  showToast(cloudOk ? 'תוצאת הנוקאאוט נוקתה והבראקט עודכן' : 'נוקה בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע', cloudOk ? 2600 : 5200);
   switchAdminPanel('knockout');
 };
 
