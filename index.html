@@ -1372,12 +1372,17 @@ function mergeDailyBonusActuals(cloudActuals={}, localActuals={}) {
 
 function mergeAppStates(cloudState={}, localState={}) {
   const matches = mergeMatchLists(cloudState.matches, localState.matches);
-  const knockoutMatches = normalizeKnockoutMatchList(mergeMatchLists(cloudState.knockoutMatches, localState.knockoutMatches));
+  const rebuiltKnockout = rebuildKnockoutProgression(
+    normalizeKnockoutMatchList(mergeMatchLists(cloudState.knockoutMatches, localState.knockoutMatches)),
+    {createMissing:true}
+  );
+  const knockoutMatches = normalizeKnockoutMatchList(rebuiltKnockout.matches);
   const knockoutMatchIds = new Set(knockoutMatches.filter(match => match?.id).map(match => match.id));
+  const invalidatedKnockoutMatchIds = new Set(rebuiltKnockout.invalidatedMatchIds || []);
   return {
     predictions: mergePredictionLists(cloudState.predictions, localState.predictions, matches),
     knockoutPredictions: mergePredictionLists(cloudState.knockoutPredictions, localState.knockoutPredictions, knockoutMatches)
-      .filter(pred => !pred?.matchId || knockoutMatchIds.has(pred.matchId)),
+      .filter(pred => !invalidatedKnockoutMatchIds.has(pred?.matchId) && (!pred?.matchId || knockoutMatchIds.has(pred.matchId))),
     specialPredictions: mergeSpecialPredictionState(cloudState.specialPredictions, localState.specialPredictions),
     matches,
     knockoutMatches,
@@ -3161,7 +3166,8 @@ function rebuildKnockoutProgression(matches, {createMissing=true}={}) {
       const sourceIdKey = `${slot}SourceMatchId`;
       const winner = knockoutWinnerTeam(sourceMatch);
       const currentTeam = (targetMatch[teamKey] || '').toString();
-      const wasDerivedFromSource = targetMatch[sourceKey] === sourceMatch.id;
+      const wasDerivedFromSource = targetMatch[sourceKey] === sourceMatch.id
+        || targetMatch[sourceIdKey] === sourceMatch.id;
       targetMatch[sourceIdKey] = sourceMatch.id;
 
       if (winner) {
