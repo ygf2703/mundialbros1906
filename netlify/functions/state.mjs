@@ -21,6 +21,7 @@ const defaults = {
 };
 const LOCK_MINUTES = 30;
 const MATCH_TIMEZONE_OFFSET_MINUTES = 180; // Israel daylight time during the tournament.
+const DISABLED_DAILY_BONUS_IDS = new Set(['ko_daily_2026_06_28']);
 
 const NOAM_PREDICTION_EMAIL = 'noamfrostig@gmail.com';
 const NOAM_PREDICTION_FIXES = [
@@ -76,8 +77,25 @@ function objectOrEmpty(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function dailyBonusQuestionIsDisabled(questionId) {
+  return DISABLED_DAILY_BONUS_IDS.has((questionId || '').toString());
+}
+
+function pruneDisabledDailyBonusFields(record={}) {
+  const normalized = {...objectOrEmpty(record)};
+  ['dailyBonus','dailyBonusTimes','dailyBonusScores'].forEach(key => {
+    const value = normalized[key];
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const cleaned = {...value};
+    DISABLED_DAILY_BONUS_IDS.forEach(questionId => delete cleaned[questionId]);
+    if (Object.keys(cleaned).length) normalized[key] = cleaned;
+    else delete normalized[key];
+  });
+  return normalized;
+}
+
 function normalizeSpecialPredictionKeys(pred={}) {
-  const normalized = {...objectOrEmpty(pred)};
+  const normalized = pruneDisabledDailyBonusFields(pred);
   const aliases = {
     pred_tournament_winner: 'tournament_winner',
     pred_tournament_winner_time: 'tournament_winner_time',
@@ -137,6 +155,7 @@ function sanitizeState(input) {
 function sanitizeDailyBonusActuals(actuals={}) {
   return Object.fromEntries(
     Object.entries(objectOrEmpty(actuals))
+      .filter(([id]) => !dailyBonusQuestionIsDisabled(id))
       .map(([id, actual]) => {
         if (actual && typeof actual === 'object' && !Array.isArray(actual)) {
           const source = objectOrEmpty(actual);

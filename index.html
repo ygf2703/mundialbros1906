@@ -384,6 +384,8 @@ const SCORING = {
   dailyBonusExact: 3
 };
 
+const DISABLED_DAILY_BONUS_IDS = new Set(['ko_daily_2026_06_28']);
+
 // Main pre-tournament bonus lock: 13 Jun 2026 22:00 Israel time.
 const OPENING_MATCH_BONUS_LOCK = new Date(2026, 5, 13, 22, 0, 0).getTime(); // local time
 const OPENING_MATCH_BONUS_LOCK_LABEL = '13.6 בשעה 22:00';
@@ -1195,8 +1197,25 @@ function mergeMatchLists(existing, incoming) {
   return [...map.values()];
 }
 
+function dailyBonusQuestionIsDisabled(questionId) {
+  return DISABLED_DAILY_BONUS_IDS.has((questionId || '').toString());
+}
+
+function pruneDisabledDailyBonusFields(record={}) {
+  const normalized = {...(record || {})};
+  ['dailyBonus','dailyBonusTimes','dailyBonusScores'].forEach(key => {
+    const value = normalized[key];
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const cleaned = {...value};
+    DISABLED_DAILY_BONUS_IDS.forEach(questionId => delete cleaned[questionId]);
+    if (Object.keys(cleaned).length) normalized[key] = cleaned;
+    else delete normalized[key];
+  });
+  return normalized;
+}
+
 function normalizeSpecialPredictionKeys(pred={}) {
-  const normalized = {...(pred || {})};
+  const normalized = pruneDisabledDailyBonusFields(pred || {});
   const aliases = {
     pred_tournament_winner: 'tournament_winner',
     pred_tournament_winner_time: 'tournament_winner_time',
@@ -1340,7 +1359,9 @@ function mergeSpecialPredictionState(existing={}, incoming={}) {
 
 function mergeDailyBonusActuals(cloudActuals={}, localActuals={}) {
   const merged = {...plainObject(localActuals)};
+  DISABLED_DAILY_BONUS_IDS.forEach(questionId => delete merged[questionId]);
   Object.entries(plainObject(cloudActuals)).forEach(([id, actual]) => {
+    if (dailyBonusQuestionIsDisabled(id)) return;
     const local = merged[id];
     const cloudTime = latestRecordTime(plainObject(actual));
     const localTime = latestRecordTime(plainObject(local));
@@ -1967,6 +1988,7 @@ function rebuildScoreStateFromSavedData() {
     if (!pred) return;
     const answers = plainObject(pred.dailyBonus);
     const scores = {...plainObject(pred.dailyBonusScores)};
+    DISABLED_DAILY_BONUS_IDS.forEach(questionId => delete scores[questionId]);
     dailyBonusQuestions.forEach(question => {
       const actual = getDailyBonusActualValue(question.id, dailyActuals);
       if (!actual) {
@@ -2565,12 +2587,19 @@ function renderDashboard() {
   const rank = me ? me.rank : '-';
   const total = lb.length;
   const matches = loadData('matches',[]);
+  const knockoutMatches = normalizeKnockoutMatchList(loadData('knockoutMatches', []));
   const preds = loadData('predictions',[]).filter(p => p.userId === currentUser.id);
+  const koPreds = loadData('knockoutPredictions',[]).filter(p => p.userId === currentUser.id);
   const missing = getMissingCount();
   
   // Next match
   const now = Date.now();
-  const upcoming = matches.filter(m => m.status === 'open' && m.startsAt > now).sort((a,b) => a.startsAt - b.startsAt);
+  const upcoming = [
+    ...matches.filter(m => m.status === 'open' && m.startsAt > now)
+      .map(match => ({...match, dashboardType: 'group'})),
+    ...knockoutMatches.filter(m => knockoutMatchReadyForPrediction(m) && m.startsAt > now && m.status !== 'finished' && m.status !== 'scored')
+      .map(match => ({...match, dashboardType: 'knockout'}))
+  ].sort((a,b) => Number(a.startsAt || 0) - Number(b.startsAt || 0));
   const nextMatch = upcoming[0];
   
   let countdownHtml = '';
@@ -2625,28 +2654,37 @@ function renderDashboard() {
 
   const upcomingPanel = upcoming.slice(0, 5);
   const upcomingHtml = upcomingPanel.map(m => {
-    const pred = preds.find(p => p.matchId === m.id);
+    const isKnockout = m.dashboardType === 'knockout';
+    const pred = (isKnockout ? koPreds : preds).find(p => p.matchId === m.id);
     const locked = matchIsLocked(m);
     const saved = predictionHasSavedPick(pred);
     const hv = pred?.predictedHomeScore !== null && pred?.predictedHomeScore !== undefined ? pred.predictedHomeScore : '';
     const av = pred?.predictedAwayScore !== null && pred?.predictedAwayScore !== undefined ? pred.predictedAwayScore : '';
     const statusClass = locked ? 'status-locked' : saved ? 'status-saved' : 'status-open';
-    const statusText = locked ? 'נעול' : saved ? '✓ נשמר' : 'פתוח לניחוש';
+    const statusText = locked ? 'נעול' : saved ? '✓ נשמר' : (isKnockout ? 'פתוח בנוקאאוט' : 'פתוח לניחוש');
+    const metaPrefix = isKnockout ? `${knockoutStageLabel(m.stage)} • ` : '';
     return `
       <div class="panel-match">
         <div class="panel-match-head">
-          <span class="panel-match-meta">${formatDate(m.date)} • ${m.time} • ${m.hostCity}</span>
+          <span class="panel-match-meta">${metaPrefix}${formatDate(m.date)} • ${m.time} • ${m.hostCity}</span>
           <span class="status-badge ${statusClass}">${statusText}</span>
         </div>
         <div class="panel-match-teams">${panelMatchupHtml(m.homeTeam, m.awayTeam)}</div>
-        <div class="panel-score-line">
+        ${isKnockout ? `
+          <div class="panel-score-line">
+            <div style="font-size:12px;color:var(--text2);font-weight:700">
+              ${saved ? `ניחוש שמור: ${scorePairHtml(pred.predictedHomeScore, pred.predictedAwayScore, 'mini-score')}${pred.predictedAdvancingTeam ? ` • עולה: ${teamText(pred.predictedAdvancingTeam)}` : ''}` : 'ניחוש תוצאה ובחירת עולה במסך הנוקאאוט'}
+            </div>
+            <button class="btn btn-primary btn-sm" type="button" onclick="navTo('knockout')">${saved ? 'פתח נוקאאוט' : 'לניחוש'}</button>
+          </div>
+        ` : `<div class="panel-score-line">
           <div class="panel-score-inputs">
             <input type="number" class="panel-score-input" min="0" max="20" id="dash_h_${m.id}" value="${hv}" ${locked?'disabled':''} placeholder="0" oninput="autoSaveDashboardPred('${m.id}')">
             <span class="score-sep">:</span>
             <input type="number" class="panel-score-input" min="0" max="20" id="dash_a_${m.id}" value="${av}" ${locked?'disabled':''} placeholder="0" oninput="autoSaveDashboardPred('${m.id}')">
           </div>
           ${locked ? `<span style="font-size:12px;color:var(--text3);font-weight:700">${saved ? 'נשמר' : 'לא ניחשת'}</span>` : `<button class="btn btn-primary btn-sm" type="button" onclick="saveDashboardPrediction('${m.id}')">${saved ? 'עדכן ניחוש' : 'שמור ניחוש'}</button>`}
-        </div>
+        </div>`}
       </div>`;
   }).join('');
 
@@ -3874,7 +3912,8 @@ function buildKnockoutBonusQuestions(matches=loadData('knockoutMatches', [])) {
 }
 
 function getDailyBonusQuestions(knockoutMatches=loadData('knockoutMatches', [])) {
-  return [...DAILY_BONUS_QUESTIONS, ...buildKnockoutBonusQuestions(knockoutMatches)];
+  return [...DAILY_BONUS_QUESTIONS, ...buildKnockoutBonusQuestions(knockoutMatches)]
+    .filter(question => !dailyBonusQuestionIsDisabled(question.id));
 }
 
 function dailyBonusInputId(questionId) {
