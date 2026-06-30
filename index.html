@@ -738,6 +738,28 @@ const TEAM_FEATURED_PLAYERS = {
   'פנמה': ['אדגר ברסנאס']
 };
 
+const TEAM_NAME_ALIASES = {
+  'נורווגיה': 'נורבגיה',
+  'Norway': 'נורבגיה',
+  'NOR': 'נורבגיה',
+  'חוף שנהב': 'חוף השנהב',
+  "Côte d'Ivoire": 'חוף השנהב',
+  "Cote d'Ivoire": 'חוף השנהב',
+  'Ivory Coast': 'חוף השנהב',
+  'CIV': 'חוף השנהב'
+};
+
+function canonicalTeamName(team) {
+  const value = (team || '').toString().trim();
+  return TEAM_NAME_ALIASES[value] || value;
+}
+
+function featuredPlayersForTeam(team) {
+  const value = (team || '').toString().trim();
+  const canonical = canonicalTeamName(value);
+  return TEAM_FEATURED_PLAYERS[canonical] || TEAM_FEATURED_PLAYERS[value] || [];
+}
+
 const ADMIN_LOGIN_ALLOWED_EMAILS = ['noamfrostig@gmail.com', 'lalobenny@gmail.com'];
 const ADMIN_LOGIN_ALLOWED_PHONES = ['0526806838', '+972526806838'];
 
@@ -1674,11 +1696,13 @@ function escapeHtml(value) {
 }
 
 function teamFlag(team) {
-  return COUNTRY_FLAGS[(team || '').toString()] || '';
+  const value = (team || '').toString();
+  return COUNTRY_FLAGS[value] || COUNTRY_FLAGS[canonicalTeamName(value)] || '';
 }
 
 function teamFlagCode(team) {
-  return COUNTRY_FLAG_CODES[(team || '').toString()] || '';
+  const value = (team || '').toString();
+  return COUNTRY_FLAG_CODES[value] || COUNTRY_FLAG_CODES[canonicalTeamName(value)] || '';
 }
 
 function teamText(team) {
@@ -3856,7 +3880,7 @@ function knockoutBonusTeams(matches) {
 
 function knockoutBonusFeaturedPlayers(matches, limit=6) {
   const teams = knockoutBonusTeams(matches);
-  const players = teams.flatMap(team => TEAM_FEATURED_PLAYERS[team] || []);
+  const players = teams.flatMap(featuredPlayersForTeam);
   return uniqueValues(players).slice(0, limit);
 }
 
