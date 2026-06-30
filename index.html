@@ -1929,7 +1929,8 @@ function deriveUserScoreMap(source={}) {
     const dailyAnswers = plainObject(pred.dailyBonus);
     getDailyBonusQuestions(koMatches).forEach(question => {
       const actual = getDailyBonusActualValue(question.id, dailyActuals);
-      if (actual && sameScoreText(dailyAnswers[question.id], actual)) {
+      const answer = dailyBonusSelectedAnswer(question, dailyAnswers);
+      if (actual && sameScoreText(answer, actual)) {
         addScore(scores, userId, dailyBonusQuestionPoints(question, actual), {bonus: true});
       }
     });
@@ -2003,7 +2004,7 @@ function rebuildScoreStateFromSavedData() {
         delete scores[question.id];
         return;
       }
-      const answer = normalizeDailyBonusValue(answers[question.id]);
+      const answer = dailyBonusSelectedAnswer(question, answers);
       const earned = answer && answer === actual ? dailyBonusQuestionPoints(question, actual) : 0;
       scores[question.id] = {
         points: earned,
@@ -3778,7 +3779,8 @@ function bonusQuestionDateKey(date) {
   return `2026_${String(parts.month).padStart(2,'0')}_${String(parts.day).padStart(2,'0')}`;
 }
 
-const KNOCKOUT_BONUS_MORNING_CYCLE_CUTOFF_HOUR = 12;
+const KNOCKOUT_BONUS_CYCLE_START_MINUTES = 18 * 60;
+const KNOCKOUT_BONUS_CYCLE_END_MINUTES = 12 * 60;
 
 function bonusQuestionDateKeyFromDate(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
@@ -3790,15 +3792,26 @@ function bonusQuestionDateLabelFromParts(parts) {
   return `${parts.day}.${parts.month}`;
 }
 
+function bonusQuestionTimeMinutes(time) {
+  const timeParts = (time || '').toString().split(':').map(Number);
+  const hour = Number.isFinite(timeParts[0]) ? timeParts[0] : null;
+  const minute = Number.isFinite(timeParts[1]) ? timeParts[1] : 0;
+  if (hour === null || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
 function knockoutBonusCycleInfo(match) {
   const parts = parseBonusQuestionDateParts(match?.date);
   if (!parts) return null;
-  const timeParts = (match?.time || '').toString().split(':').map(Number);
-  const hour = Number.isFinite(timeParts[0]) ? timeParts[0] : 0;
-  const minute = Number.isFinite(timeParts[1]) ? timeParts[1] : 0;
-  const cycleDate = new Date(2026, parts.month - 1, parts.day, hour, minute);
-  if (hour < KNOCKOUT_BONUS_MORNING_CYCLE_CUTOFF_HOUR) {
+  const minutes = bonusQuestionTimeMinutes(match?.time);
+  if (minutes === null) return null;
+  const cycleDate = new Date(2026, parts.month - 1, parts.day, 0, 0);
+  if (minutes >= KNOCKOUT_BONUS_CYCLE_START_MINUTES) {
+    // Evening matches open a new bonus cycle for that match night.
+  } else if (minutes <= KNOCKOUT_BONUS_CYCLE_END_MINUTES) {
     cycleDate.setDate(cycleDate.getDate() - 1);
+  } else {
+    return null;
   }
   return {
     key: bonusQuestionDateKeyFromDate(cycleDate),
@@ -3853,7 +3866,7 @@ function knockoutBonusStageSummary(matches) {
 
 function knockoutBonusQuestionFromDay(date, matches, dateKeyOverride='') {
   const mainMatches = sortedKnockoutMatches(matches)
-    .filter(match => match && KNOCKOUT_MAIN_STAGES.includes(match.stage) && !match.isPlaceholder);
+    .filter(match => knockoutMatchReadyForPrediction(match) && KNOCKOUT_MAIN_STAGES.includes(match.stage));
   if (!mainMatches.length) return null;
 
   const firstMatch = [...mainMatches]
@@ -3874,7 +3887,7 @@ function knockoutBonusQuestionFromDay(date, matches, dateKeyOverride='') {
     dateLabel: `הצלבה • ${date} • ${stageSummary}`,
     lockDate: firstMatch.date || date,
     lockTime: firstMatch.time,
-    scoringNote: `שאלת בונוס יומית לשלב ${stageSummary}. מחזור בונוס כולל ערב ובוקר, ונסגר לפי המשחק הראשון של אותו מחזור.`
+    scoringNote: `שאלת בונוס יומית לשלב ${stageSummary}. מחזור בונוס הוא מ-18:00 ועד 12:00 למחרת, ונסגר לפי המשחק הראשון של אותו מחזור.`
   };
 
   if (stage === 'final') {
@@ -3960,7 +3973,7 @@ function knockoutBonusQuestionFromDay(date, matches, dateKeyOverride='') {
 function buildKnockoutBonusQuestions(matches=loadData('knockoutMatches', [])) {
   const byCycle = new Map();
   sortedKnockoutMatches(matches || [])
-    .filter(match => match && !match.isPlaceholder && KNOCKOUT_MAIN_STAGES.includes(match.stage) && match.date && match.time)
+    .filter(match => knockoutMatchReadyForPrediction(match) && KNOCKOUT_MAIN_STAGES.includes(match.stage) && match.date && match.time)
     .forEach(match => {
       const cycle = knockoutBonusCycleInfo(match);
       if (!cycle?.key) return;
@@ -4047,21 +4060,29 @@ function normalizeDailyBonusValue(value) {
     .trim();
 }
 
+function dailyBonusAnswerIsValid(question, answer) {
+  const normalized = normalizeDailyBonusValue(answer);
+  if (!normalized) return false;
+  return (question?.options || []).some(option => normalizeDailyBonusValue(option) === normalized);
+}
+
+function dailyBonusSelectedAnswer(question, answers={}) {
+  const selected = normalizeDailyBonusValue(answers[question?.id]);
+  return dailyBonusAnswerIsValid(question, selected) ? selected : '';
+}
+
 function renderDailyBonusPredictions(mySpecial={}) {
   const answers = plainObject(mySpecial.dailyBonus);
   const times = plainObject(mySpecial.dailyBonusTimes);
   const dailyBonusQuestions = getDailyBonusQuestions();
-  const answeredCount = dailyBonusQuestions.filter(q => answers[q.id]).length;
+  const answeredCount = dailyBonusQuestions.filter(q => dailyBonusSelectedAnswer(q, answers)).length;
 
   const cards = dailyBonusQuestions.map(question => {
-    const selected = normalizeDailyBonusValue(answers[question.id]);
+    const selected = dailyBonusSelectedAnswer(question, answers);
     const locked = dailyBonusIsLocked(question);
     const pointsLabel = dailyBonusQuestionPointsLabel(question);
     const inputId = dailyBonusInputId(question.id);
     const savedAt = Number(times[question.id] || 0);
-    const unknownSelected = selected && !question.options.includes(selected)
-      ? `<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)}</option>`
-      : '';
     const optionsHtml = question.options.map(option => `
       <option value="${escapeHtml(option)}" ${selected===option?'selected':''}>${escapeHtml(option)}</option>
     `).join('');
@@ -4086,10 +4107,9 @@ function renderDailyBonusPredictions(mySpecial={}) {
           ` : `
             <select class="form-input" id="${inputId}" onchange="markUnsavedPrediction('special:dailyBonus:${question.id}')" style="margin-bottom:8px">
               <option value="">-- בחר תשובה --</option>
-              ${unknownSelected}
               ${optionsHtml}
             </select>
-            ${savedAt ? `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">נשמר לאחרונה</div>` : ''}
+            ${selected && savedAt ? `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">נשמר לאחרונה</div>` : ''}
             <button class="btn btn-primary btn-sm btn-full" type="button" onclick="saveDailyBonus('${question.id}')">שמור שאלת בונוס</button>
           `}
         </div>
@@ -5243,15 +5263,13 @@ function renderAdminDailyBonus() {
   const dailyBonusQuestions = getDailyBonusQuestions();
 
   const questionCards = dailyBonusQuestions.map(question => {
-    const actualValue = getDailyBonusActualValue(question.id, actuals);
+    const storedActualValue = getDailyBonusActualValue(question.id, actuals);
+    const actualValue = dailyBonusAnswerIsValid(question, storedActualValue) ? storedActualValue : '';
     const pointsLabel = dailyBonusQuestionPointsLabel(question);
-    const answered = users.filter(user => normalizeDailyBonusValue(plainObject(specials[user.id]?.dailyBonus)[question.id])).length;
+    const answered = users.filter(user => dailyBonusSelectedAnswer(question, plainObject(specials[user.id]?.dailyBonus))).length;
     const correct = actualValue
-      ? users.filter(user => normalizeDailyBonusValue(plainObject(specials[user.id]?.dailyBonus)[question.id]) === actualValue).length
+      ? users.filter(user => dailyBonusSelectedAnswer(question, plainObject(specials[user.id]?.dailyBonus)) === actualValue).length
       : 0;
-    const unknownActual = actualValue && !question.options.includes(actualValue)
-      ? `<option value="${escapeHtml(actualValue)}" selected>${escapeHtml(actualValue)}</option>`
-      : '';
 
     return `
       <div class="card" style="margin-bottom:12px">
@@ -5268,7 +5286,6 @@ function renderAdminDailyBonus() {
           <label class="form-label">תשובת אמת</label>
           <select class="form-input" id="${dailyBonusActualInputId(question.id)}" style="margin-bottom:10px">
             <option value="">-- בחר תשובה נכונה --</option>
-            ${unknownActual}
             ${question.options.map(option => `<option value="${escapeHtml(option)}" ${actualValue===option?'selected':''}>${escapeHtml(option)}</option>`).join('')}
           </select>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -5284,7 +5301,7 @@ function renderAdminDailyBonus() {
     const userSpecial = specials[user.id] || {};
     const answers = plainObject(userSpecial.dailyBonus);
     const scores = plainObject(userSpecial.dailyBonusScores);
-    const answered = dailyBonusQuestions.filter(q => answers[q.id]).length;
+    const answered = dailyBonusQuestions.filter(q => dailyBonusSelectedAnswer(q, answers)).length;
     const dailyPoints = dailyBonusQuestions.reduce((sum, q) => {
       const raw = scores[q.id];
       if (typeof raw === 'number') return sum + raw;
@@ -5326,7 +5343,7 @@ function applyDailyBonusQuestionScore(question, actualValue, users, specials) {
     const userSpecial = specials[user.id];
     const answers = plainObject(userSpecial.dailyBonus);
     const scores = plainObject(userSpecial.dailyBonusScores);
-    const answer = normalizeDailyBonusValue(answers[question.id]);
+    const answer = dailyBonusSelectedAnswer(question, answers);
     const previousRaw = scores[question.id];
     const previousPoints = typeof previousRaw === 'number'
       ? previousRaw
