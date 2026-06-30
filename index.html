@@ -3880,8 +3880,15 @@ function knockoutBonusTeams(matches) {
 
 function knockoutBonusFeaturedPlayers(matches, limit=6) {
   const teams = knockoutBonusTeams(matches);
-  const players = teams.flatMap(featuredPlayersForTeam);
-  return uniqueValues(players).slice(0, limit);
+  const playersByTeam = teams.map(featuredPlayersForTeam).filter(players => players.length);
+  const selected = [];
+  const maxDepth = Math.max(0, ...playersByTeam.map(players => players.length));
+  for (let depth = 0; depth < maxDepth && selected.length < limit; depth++) {
+    playersByTeam.forEach(players => {
+      if (selected.length < limit && players[depth]) selected.push(players[depth]);
+    });
+  }
+  return uniqueValues(selected).slice(0, limit);
 }
 
 function knockoutBonusStageSummary(matches) {
