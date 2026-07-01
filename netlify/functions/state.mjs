@@ -51,6 +51,16 @@ const NOAM_PREDICTION_FIXES = [
     marker: 'noam_brazil_haiti_2026_06_20'
   }
 ];
+const NOAM_KNOCKOUT_PREDICTION_FIXES = [
+  {
+    team: '\u05de\u05e7\u05e1\u05d9\u05e7\u05d5',
+    opponent: '\u05d0\u05e7\u05d5\u05d5\u05d3\u05d5\u05e8',
+    teamScore: 2,
+    opponentScore: 0,
+    advancingTeam: '\u05de\u05e7\u05e1\u05d9\u05e7\u05d5',
+    marker: 'noam_mexico_ecuador_2026_07_01'
+  }
+];
 const NOAM_DAILY_BONUS_FIXES = [
   {
     questionId: 'daily_2026_06_24_round3_goals',
@@ -509,6 +519,52 @@ async function applyNoamPredictionFixes(state, userStore) {
     applied++;
   });
 
+  let knockoutApplied = 0;
+  NOAM_KNOCKOUT_PREDICTION_FIXES.forEach(fix => {
+    const match = safeState.knockoutMatches.find(m => (
+      sameTeamName(m?.homeTeam, fix.team) && sameTeamName(m?.awayTeam, fix.opponent)
+    ) || (
+      sameTeamName(m?.homeTeam, fix.opponent) && sameTeamName(m?.awayTeam, fix.team)
+    ));
+    if (!match?.id) {
+      missingMatches.push(`${fix.team}-${fix.opponent}`);
+      return;
+    }
+
+    const teamIsHome = sameTeamName(match.homeTeam, fix.team);
+    const predictedHomeScore = teamIsHome ? fix.teamScore : fix.opponentScore;
+    const predictedAwayScore = teamIsHome ? fix.opponentScore : fix.teamScore;
+    const fixedSubmittedAt = Math.max(1, matchLockTime(match) - 60 * 1000);
+    const existing = safeState.knockoutPredictions.find(p => p?.userId === user.id && p?.matchId === match.id);
+    const patch = {
+      id: existing?.id || `manual_noam_ko_${match.id}`,
+      userId: user.id,
+      matchId: match.id,
+      predictedHomeScore,
+      predictedAwayScore,
+      predictedOutcome: scoreOutcome(predictedHomeScore, predictedAwayScore),
+      predictedAdvancingTeam: fix.advancingTeam,
+      scoreAwarded: existing?.scoreAwarded || 0,
+      isExact: !!existing?.isExact,
+      isOutcomeCorrect: !!existing?.isOutcomeCorrect,
+      submittedAt: fixedSubmittedAt,
+      updatedAt: fixedSubmittedAt,
+      lockedAt: existing?.lockedAt || null,
+      manualFix: fix.marker
+    };
+
+    if (existing
+      && existing.predictedHomeScore === patch.predictedHomeScore
+      && existing.predictedAwayScore === patch.predictedAwayScore
+      && existing.predictedOutcome === patch.predictedOutcome
+      && sameTeamName(existing.predictedAdvancingTeam, patch.predictedAdvancingTeam)) return;
+
+    safeState.knockoutPredictions = existing
+      ? safeState.knockoutPredictions.map(pred => pred === existing ? {...existing, ...patch} : pred)
+      : [...safeState.knockoutPredictions, patch];
+    knockoutApplied++;
+  });
+
   const userSpecial = normalizeSpecialPredictionKeys(safeState.specialPredictions[user.id]);
   const dailyBonus = objectOrEmpty(userSpecial.dailyBonus);
   const dailyBonusTimes = objectOrEmpty(userSpecial.dailyBonusTimes);
@@ -530,9 +586,10 @@ async function applyNoamPredictionFixes(state, userStore) {
     };
   }
 
-  const changed = applied > 0 || dailyBonusApplied > 0;
+  const changed = applied > 0 || knockoutApplied > 0 || dailyBonusApplied > 0;
   const reasons = [];
   if (applied) reasons.push(`predictions_applied:${applied}`);
+  if (knockoutApplied) reasons.push(`knockout_predictions_applied:${knockoutApplied}`);
   if (dailyBonusApplied) reasons.push(`daily_bonus_applied:${dailyBonusApplied}`);
   if (!reasons.length && missingMatches.length) reasons.push(`match_not_found:${missingMatches.join(',')}`);
   const reason = reasons.length ? reasons.join(';') : 'already_set';
