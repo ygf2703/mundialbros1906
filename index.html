@@ -1868,8 +1868,7 @@ function addScore(scoreMap, userId, amount, options={}) {
 
 function matchScoreDetails(pred, match) {
   if (!pred || !match) {
-    const fallback = Number(pred?.scoreAwarded || 0);
-    return {score: fallback, isExact: !!pred?.isExact, isOutcomeCorrect: !!pred?.isOutcomeCorrect};
+    return {score: 0, isExact: false, isOutcomeCorrect: false};
   }
 
   const ah = scoreNumber(match.actualHomeScore);
@@ -1878,8 +1877,7 @@ function matchScoreDetails(pred, match) {
   const pa = scoreNumber(pred.predictedAwayScore);
 
   if (ah === null || aa === null || ph === null || pa === null) {
-    const fallback = Number(pred.scoreAwarded || 0);
-    return {score: fallback, isExact: !!pred.isExact, isOutcomeCorrect: !!pred.isOutcomeCorrect};
+    return {score: 0, isExact: false, isOutcomeCorrect: false};
   }
 
   const normalizedPred = {...pred, predictedHomeScore: ph, predictedAwayScore: pa};
@@ -1994,26 +1992,8 @@ function rebuildScoreStateFromSavedData() {
   const knockoutMatches = loadData('knockoutMatches', []);
   const matchMap = new Map(matches.filter(m => m?.id).map(m => [m.id, m]));
   const koMatchMap = new Map(knockoutMatches.filter(m => m?.id).map(m => [m.id, m]));
-  const predictions = loadData('predictions', []).map(pred => {
-    const details = matchScoreDetails(pred, matchMap.get(pred.matchId));
-    return {
-      ...pred,
-      scoreAwarded: details.score,
-      isExact: details.isExact,
-      isOutcomeCorrect: details.isOutcomeCorrect,
-      scoredAt: details.score ? (pred.scoredAt || Date.now()) : null
-    };
-  });
-  const knockoutPredictions = loadData('knockoutPredictions', []).map(pred => {
-    const details = matchScoreDetails(pred, koMatchMap.get(pred.matchId));
-    return {
-      ...pred,
-      scoreAwarded: details.score,
-      isExact: details.isExact,
-      isOutcomeCorrect: details.isOutcomeCorrect,
-      scoredAt: details.score ? (pred.scoredAt || Date.now()) : null
-    };
-  });
+  const predictions = loadData('predictions', []).map(pred => scorePredictionRecord(pred, matchMap.get(pred.matchId)));
+  const knockoutPredictions = loadData('knockoutPredictions', []).map(pred => scorePredictionRecord(pred, koMatchMap.get(pred.matchId)));
   const specialPredictions = getSpecialPredictions();
   const dailyActuals = loadData('dailyBonusActuals', {});
   const dailyBonusQuestions = getDailyBonusQuestions(knockoutMatches);
@@ -2104,8 +2084,22 @@ function formatDate(dateStr) {
   return `${day} ${months[parseInt(month)] || ''}`;
 }
 
+function teamsMatchForScoring(a, b) {
+  const first = canonicalTeamName(a);
+  const second = canonicalTeamName(b);
+  return !!(first && second && sameScoreText(first, second));
+}
+
+function predictedAdvancingTeamForScoring(pred, match) {
+  if (pred?.predictedAdvancingTeam) return pred.predictedAdvancingTeam;
+  const ph = scoreNumber(pred?.predictedHomeScore);
+  const pa = scoreNumber(pred?.predictedAwayScore);
+  if (!match || ph === null || pa === null || ph === pa) return '';
+  return ph > pa ? match.homeTeam : match.awayTeam;
+}
+
 function knockoutAdvancingBonusApplies(pred, match) {
-  return !!(pred?.predictedAdvancingTeam && match?.advancingTeam && pred.predictedAdvancingTeam === match.advancingTeam);
+  return teamsMatchForScoring(predictedAdvancingTeamForScoring(pred, match), match?.advancingTeam);
 }
 
 function computeScoreForPrediction(pred, match) {
@@ -2136,6 +2130,28 @@ function computeScoreForPrediction(pred, match) {
     }
   }
   return score;
+}
+
+function scorePredictionRecord(pred, match) {
+  const details = matchScoreDetails(pred, match);
+  const score = Number(details.score || 0);
+  return {
+    ...pred,
+    scoreAwarded: score,
+    isExact: details.isExact,
+    isOutcomeCorrect: details.isOutcomeCorrect,
+    scoredAt: score ? (pred.scoredAt || match?.scoredAt || match?.updatedAt || Date.now()) : null
+  };
+}
+
+function rebuildKnockoutScoringState(knockoutMatches, knockoutPredictions, users) {
+  const koMatchMap = new Map((knockoutMatches || []).filter(m => m?.id).map(m => [m.id, m]));
+  const scoredPredictions = (knockoutPredictions || []).map(pred => scorePredictionRecord(pred, koMatchMap.get(pred.matchId)));
+  const scoredUsers = usersWithDerivedScores(users || loadData('users', []), {
+    knockoutMatches,
+    knockoutPredictions: scoredPredictions
+  });
+  return {users: scoredUsers, knockoutPredictions: scoredPredictions};
 }
 
 // ============================================================
@@ -3413,8 +3429,9 @@ function renderKnockoutPredictionCard(match, prediction) {
   else if (saved) statusBadge = '<span class="status-badge status-saved">✓ נשמר</span>';
   else statusBadge = '<span class="status-badge status-open">פתוח</span>';
 
+  const liveScore = finalized && saved ? Number(matchScoreDetails(prediction, match).score || 0) : Number(prediction?.scoreAwarded || 0);
   const resultBadge = finalized && saved
-    ? `<span class="score-result ${Number(prediction?.scoreAwarded || 0) > 0 ? 'result-exact' : 'result-miss'}">+${Number(prediction?.scoreAwarded || 0)} נק'</span>`
+    ? `<span class="score-result ${liveScore > 0 ? 'result-exact' : 'result-miss'}">+${liveScore} נק'</span>`
     : '';
 
   return `
@@ -3644,7 +3661,7 @@ window.saveKOPrediction = async function(matchId) {
   
   let koPreds = loadData('knockoutPredictions',[]);
   const existing = koPreds.find(p => p.userId === currentUser.id && p.matchId === matchId);
-  const adv = advEl?.value || null;
+  const adv = advEl?.value || (h !== a ? (h > a ? match.homeTeam : match.awayTeam) : null);
   const now = Date.now();
   if (existing) {
     existing.predictedHomeScore = h; existing.predictedAwayScore = a;
@@ -4525,10 +4542,10 @@ window.navTo = function(page) {
 // ADMIN SHELL
 // ============================================================
 function renderAdminShell() {
-  const panels = ['results','users','matches','groups','daily-bonus','knockout','topscorer','upload-users','upload-matches'];
+  const panels = ['results','users','matches','groups','daily-bonus','knockout','topscorer','audit-report','upload-users','upload-matches'];
   const panelLabels = {
     results:'תוצאות',users:'משתמשים',matches:'משחקים',groups:'בתים',
-    'daily-bonus':'בונוס יומי',knockout:'נוקאאוט','topscorer':'מלך שערים','upload-users':'העלאת משתמשים','upload-matches':'העלאת משחקים'
+    'daily-bonus':'בונוס יומי',knockout:'נוקאאוט','topscorer':'מלך שערים','audit-report':'דוח הימורים','upload-users':'העלאת משתמשים','upload-matches':'העלאת משחקים'
   };
   
   return `
@@ -4560,6 +4577,7 @@ function renderAdminShell() {
       <div class="admin-panel${adminPanel==='daily-bonus'?' active':''}" id="apanel-daily-bonus">${renderAdminDailyBonus()}</div>
       <div class="admin-panel${adminPanel==='knockout'?' active':''}" id="apanel-knockout">${renderAdminKnockout()}</div>
       <div class="admin-panel${adminPanel==='topscorer'?' active':''}" id="apanel-topscorer">${renderAdminTopScorer()}</div>
+      <div class="admin-panel${adminPanel==='audit-report'?' active':''}" id="apanel-audit-report">${renderAdminAuditReport()}</div>
       <div class="admin-panel${adminPanel==='upload-users'?' active':''}" id="apanel-upload-users">${renderUploadUsers()}</div>
       <div class="admin-panel${adminPanel==='upload-matches'?' active':''}" id="apanel-upload-matches">${renderUploadMatches()}</div>
     </div>
@@ -4647,7 +4665,7 @@ window.switchAdminPanel = function(panel) {
   const el = document.getElementById('apanel-'+panel);
   if (el) el.classList.add('active');
   const btns = document.querySelectorAll('.admin-nav-item');
-  const panels = ['results','users','matches','groups','daily-bonus','knockout','topscorer','upload-users','upload-matches'];
+  const panels = ['results','users','matches','groups','daily-bonus','knockout','topscorer','audit-report','upload-users','upload-matches'];
   const idx = panels.indexOf(panel);
   if (btns[idx]) btns[idx].classList.add('active');
   // Re-render panel content
@@ -4660,6 +4678,7 @@ window.switchAdminPanel = function(panel) {
       if (panel==='daily-bonus') return renderAdminDailyBonus();
       if (panel==='knockout') { setTimeout(bindAdminKnockoutUpload,50); return renderAdminKnockout(); }
       if (panel==='topscorer') return renderAdminTopScorer();
+      if (panel==='audit-report') return renderAdminAuditReport();
       if (panel==='upload-users') { setTimeout(bindUploadUsers,50); return renderUploadUsers(); }
       if (panel==='upload-matches') { setTimeout(bindUploadMatches,50); return renderUploadMatches(); }
       return '';
@@ -5479,6 +5498,542 @@ window.scoreAllDailyBonusQuestions = async function() {
 };
 
 // ============================================================
+// ADMIN: PREDICTIONS AUDIT REPORT
+// ============================================================
+const AUDIT_REPORT_COLUMNS = [
+  {key:'participant', label:'משתתף'},
+  {key:'teamName', label:'שם קבוצה'},
+  {key:'email', label:'אימייל'},
+  {key:'category', label:'סוג הימור'},
+  {key:'stage', label:'שלב'},
+  {key:'itemId', label:'מזהה'},
+  {key:'item', label:'משחק / שאלה'},
+  {key:'scheduledAt', label:'מועד'},
+  {key:'prediction', label:'הימור'},
+  {key:'actual', label:'תוצאה / תשובת אמת'},
+  {key:'result', label:'סטטוס פגיעה'},
+  {key:'points', label:'נקודות'},
+  {key:'savedAt', label:'נשמר / עודכן'},
+  {key:'hitAt', label:'נוקד / פגע'}
+];
+
+function auditText(value, fallback='') {
+  const text = value === null || value === undefined ? '' : String(value).trim();
+  return text || fallback;
+}
+
+function auditUserName(user) {
+  return auditText(user?.fullName || user?.displayName || user?.email || user?.id, 'משתמש');
+}
+
+function auditTeamName(team) {
+  return auditText(canonicalTeamName(team), 'TBD');
+}
+
+function auditTimestampNumber(value) {
+  const num = Number(value || 0);
+  return Number.isFinite(num) && num > 0 ? num : 0;
+}
+
+function auditFirstTimestamp(...values) {
+  for (const value of values) {
+    const ts = auditTimestampNumber(value);
+    if (ts) return ts;
+  }
+  return 0;
+}
+
+function auditLatestTimestamp(...values) {
+  return values.reduce((latest, value) => Math.max(latest, auditTimestampNumber(value)), 0);
+}
+
+function auditFormatTimestamp(value) {
+  const ts = auditTimestampNumber(value);
+  if (!ts) return '';
+  try {
+    return new Date(ts).toLocaleString('he-IL', {
+      year:'numeric',
+      month:'2-digit',
+      day:'2-digit',
+      hour:'2-digit',
+      minute:'2-digit'
+    });
+  } catch {
+    return '';
+  }
+}
+
+function auditMatchSchedule(match) {
+  if (match?.date || match?.time) return [match.date, match.time].filter(Boolean).join(' ');
+  const startsAt = auditTimestampNumber(match?.startsAt);
+  return startsAt ? auditFormatTimestamp(startsAt) : '';
+}
+
+function auditPredictionSavedAt(pred) {
+  if (!pred) return '';
+  return auditFormatTimestamp(auditLatestTimestamp(pred.updatedAt, pred.submittedAt, pred.createdAt));
+}
+
+function auditMatchHasResult(match) {
+  return !!match && scoreNumber(match.actualHomeScore) !== null && scoreNumber(match.actualAwayScore) !== null;
+}
+
+function auditPredictionScoreText(pred, isKnockout=false) {
+  if (!pred) return 'לא ניחש';
+  const ph = scoreNumber(pred.predictedHomeScore);
+  const pa = scoreNumber(pred.predictedAwayScore);
+  const score = ph !== null && pa !== null ? `${ph}:${pa}` : 'תוצאה לא מלאה';
+  if (!isKnockout) return score;
+  return `${score}${pred.predictedAdvancingTeam ? `, עולה: ${auditTeamName(pred.predictedAdvancingTeam)}` : ''}`;
+}
+
+function auditMatchActualText(match, isKnockout=false) {
+  if (!auditMatchHasResult(match)) return '';
+  const actual = `${scoreNumber(match.actualHomeScore)}:${scoreNumber(match.actualAwayScore)}`;
+  if (!isKnockout) return actual;
+  return `${actual}${match?.advancingTeam ? `, עולה: ${auditTeamName(match.advancingTeam)}` : ''}`;
+}
+
+function auditMatchTitle(match) {
+  if (!match) return 'משחק לא נמצא';
+  return `${auditTeamName(match.homeTeam)} נגד ${auditTeamName(match.awayTeam)}`;
+}
+
+function auditMatchStatus(pred, match, details, isKnockout=false) {
+  if (!pred) return 'לא ניחש';
+  const hasResult = auditMatchHasResult(match);
+  const score = Number(details?.score || 0);
+  if (!hasResult && !score) return 'ממתין לתוצאה';
+
+  const parts = [];
+  if (details?.isExact) parts.push('תוצאה מדויקת');
+  else if (details?.isOutcomeCorrect) parts.push('כיוון נכון');
+  else if (hasResult) parts.push('לא פגע בתוצאה');
+  else parts.push('ניקוד שמור ללא תוצאה קיימת');
+
+  if (isKnockout) {
+    if (pred.predictedAdvancingTeam && match?.advancingTeam) {
+      parts.push(knockoutAdvancingBonusApplies(pred, match) ? 'עולה נכונה' : 'עולה לא נכונה');
+    } else if (pred.predictedAdvancingTeam) {
+      parts.push('ממתין לעולה');
+    }
+  }
+
+  return parts.join(' + ');
+}
+
+function auditHitTimestamp(pred, match, points) {
+  if (!Number(points || 0)) return '';
+  return auditFormatTimestamp(auditFirstTimestamp(pred?.scoredAt, match?.scoredAt, match?.updatedAt));
+}
+
+function auditBaseRow(user, values={}) {
+  return {
+    userId: user?.id || '',
+    participant: auditUserName(user),
+    teamName: auditText(user?.teamName, ''),
+    email: auditText(user?.email, ''),
+    category: '',
+    stage: '',
+    itemId: '',
+    item: '',
+    scheduledAt: '',
+    prediction: '',
+    actual: '',
+    result: '',
+    points: 0,
+    savedAt: '',
+    hitAt: '',
+    ...values
+  };
+}
+
+function auditPredictionIndex(predictions=[]) {
+  const index = new Map();
+  (predictions || []).forEach(pred => {
+    if (!pred?.userId || !pred?.matchId) return;
+    const key = `${pred.userId}:${pred.matchId}`;
+    if (!index.has(key)) index.set(key, []);
+    index.get(key).push(pred);
+  });
+  index.forEach(list => list.sort((a,b) => predictionEditTime(a) - predictionEditTime(b)));
+  return index;
+}
+
+function appendMatchAuditRows(rows, users, matches, predictions, options={}) {
+  const isKnockout = !!options.isKnockout;
+  const category = isKnockout ? 'נוקאאוט' : 'משחקי בתים';
+  const predictionIndex = auditPredictionIndex(predictions);
+  const knownMatchIds = new Set((matches || []).filter(match => match?.id).map(match => match.id));
+  const handledPredictions = new Set();
+  const sortedMatches = [...(matches || [])].filter(Boolean).sort((a,b) => Number(a.startsAt || 0) - Number(b.startsAt || 0));
+
+  users.forEach(user => {
+    sortedMatches.forEach(match => {
+      const predictionsForMatch = predictionIndex.get(`${user.id}:${match.id}`) || [];
+      if (!predictionsForMatch.length) {
+        rows.push(auditBaseRow(user, {
+          category,
+          stage: isKnockout ? knockoutStageLabel(match.stage) : 'שלב בתים',
+          itemId: match.id || '',
+          item: auditMatchTitle(match),
+          scheduledAt: auditMatchSchedule(match),
+          prediction: 'לא ניחש',
+          actual: auditMatchActualText(match, isKnockout),
+          result: 'לא ניחש',
+          points: 0
+        }));
+        return;
+      }
+
+      predictionsForMatch.forEach((pred, index) => {
+        handledPredictions.add(pred);
+        const details = matchScoreDetails(pred, match);
+        const duplicateLabel = predictionsForMatch.length > 1 ? ` #${index + 1}` : '';
+        rows.push(auditBaseRow(user, {
+          category,
+          stage: isKnockout ? knockoutStageLabel(match.stage) : 'שלב בתים',
+          itemId: match.id || pred.matchId || '',
+          item: `${auditMatchTitle(match)}${duplicateLabel}`,
+          scheduledAt: auditMatchSchedule(match),
+          prediction: auditPredictionScoreText(pred, isKnockout),
+          actual: auditMatchActualText(match, isKnockout),
+          result: auditMatchStatus(pred, match, details, isKnockout),
+          points: Number(details.score || 0),
+          savedAt: auditPredictionSavedAt(pred),
+          hitAt: auditHitTimestamp(pred, match, details.score)
+        }));
+      });
+    });
+  });
+
+  (predictions || []).forEach(pred => {
+    if (handledPredictions.has(pred) || knownMatchIds.has(pred.matchId)) return;
+    const user = users.find(candidate => candidate.id === pred.userId) || {id: pred.userId};
+    const details = matchScoreDetails(pred, null);
+    rows.push(auditBaseRow(user, {
+      category,
+      stage: isKnockout ? 'נוקאאוט' : 'שלב בתים',
+      itemId: pred.matchId || '',
+      item: 'משחק שנמחק או לא נמצא',
+      prediction: auditPredictionScoreText(pred, isKnockout),
+      actual: '',
+      result: 'ניחוש שמור ללא משחק פעיל',
+      points: Number(details.score || 0),
+      savedAt: auditPredictionSavedAt(pred),
+      hitAt: auditFormatTimestamp(auditFirstTimestamp(pred.scoredAt))
+    }));
+  });
+}
+
+function appendDailyBonusAuditRows(rows, users, questions, specials, actuals) {
+  users.forEach(user => {
+    const userSpecial = plainObject(specials[user.id]);
+    const answers = plainObject(userSpecial.dailyBonus);
+    const times = plainObject(userSpecial.dailyBonusTimes);
+    const scores = plainObject(userSpecial.dailyBonusScores);
+
+    questions.forEach(question => {
+      const answer = dailyBonusSelectedAnswer(question, answers);
+      const actualValue = getDailyBonusActualValue(question.id, actuals);
+      const actualRecord = plainObject(plainObject(actuals)[question.id]);
+      const rawScore = scores[question.id];
+      const scoreRecord = typeof rawScore === 'number' ? {points: rawScore} : plainObject(rawScore);
+      const points = answer && actualValue && sameScoreText(answer, actualValue)
+        ? dailyBonusQuestionPoints(question, actualValue)
+        : 0;
+      const result = !answer
+        ? 'לא ניחש'
+        : !actualValue
+          ? 'ממתין לתשובת אמת'
+          : points
+            ? 'פגע'
+            : 'לא פגע';
+
+      rows.push(auditBaseRow(user, {
+        category: 'בונוס יומי',
+        stage: question.source === 'knockout' ? 'נוקאאוט' : 'שלב בתים',
+        itemId: question.id,
+        item: question.question || question.dateLabel || question.id,
+        scheduledAt: [question.lockDate, question.lockTime].filter(Boolean).join(' '),
+        prediction: answer || 'לא ניחש',
+        actual: actualValue || '',
+        result,
+        points,
+        savedAt: auditFormatTimestamp(times[question.id]),
+        hitAt: points ? auditFormatTimestamp(auditFirstTimestamp(scoreRecord.scoredAt, actualRecord.scoredAt, actualRecord.updatedAt)) : ''
+      }));
+    });
+  });
+}
+
+function appendNamedSpecialAuditRows(rows, users, source) {
+  const groups = source.groups || GROUPS_DEF;
+  const specials = source.specialPredictions || {};
+
+  users.forEach(user => {
+    const userSpecial = plainObject(specials[user.id]);
+
+    Object.keys(groups || {}).forEach(groupId => {
+      const key = `group_${groupId}`;
+      const answer = auditText(userSpecial[key], '');
+      const actual = auditText(source.actualGroupWinners?.[groupId], '');
+      const points = answer && actual && sameScoreText(answer, actual) ? SCORING.groupWinner : 0;
+      rows.push(auditBaseRow(user, {
+        category: 'בונוס מיוחד',
+        stage: 'שלב בתים',
+        itemId: key,
+        item: `מנצחת בית ${groupId}`,
+        scheduledAt: OPENING_MATCH_BONUS_LOCK_LABEL,
+        prediction: answer || 'לא ניחש',
+        actual,
+        result: !answer ? 'לא ניחש' : !actual ? 'ממתין לתשובת אמת' : points ? 'פגע' : 'לא פגע',
+        points,
+        savedAt: auditFormatTimestamp(userSpecial[`${key}_time`])
+      }));
+    });
+
+    const topScorer = auditText(userSpecial.topScorer, '');
+    const topScorerPoints = topScorer && source.actualTopScorer && sameScoreText(topScorer, source.actualTopScorer) ? SCORING.topScorer : 0;
+    rows.push(auditBaseRow(user, {
+      category: 'בונוס מיוחד',
+      stage: 'טורניר',
+      itemId: 'topScorer',
+      item: 'מלך השערים',
+      scheduledAt: OPENING_MATCH_BONUS_LOCK_LABEL,
+      prediction: topScorer || 'לא ניחש',
+      actual: source.actualTopScorer || '',
+      result: !topScorer ? 'לא ניחש' : !source.actualTopScorer ? 'ממתין לתשובת אמת' : topScorerPoints ? 'פגע' : 'לא פגע',
+      points: topScorerPoints,
+      savedAt: auditFormatTimestamp(userSpecial.topScorerTime)
+    }));
+
+    const champion = auditText(userSpecial.tournament_winner, '');
+    const championPoints = champion && source.actualChampion && sameScoreText(champion, source.actualChampion) ? SCORING.tournamentWinner : 0;
+    rows.push(auditBaseRow(user, {
+      category: 'בונוס מיוחד',
+      stage: 'טורניר',
+      itemId: 'tournament_winner',
+      item: 'אלופת העולם',
+      scheduledAt: OPENING_MATCH_BONUS_LOCK_LABEL,
+      prediction: champion || 'לא ניחש',
+      actual: source.actualChampion || '',
+      result: !champion ? 'לא ניחש' : !source.actualChampion ? 'ממתין לתשובת אמת' : championPoints ? 'פגע' : 'לא פגע',
+      points: championPoints,
+      savedAt: auditFormatTimestamp(userSpecial.tournament_winner_time)
+    }));
+  });
+}
+
+function appendKnockoutStageBonusAuditRows(rows, users, source) {
+  const defs = [
+    {stage:'round_of_16', prefix:'r16', title:'מנצחת שמינית גמר'},
+    {stage:'quarter_final', prefix:'qf', title:'מנצחת רבע גמר'},
+    {stage:'semi_final', prefix:'sf', title:'מנצחת חצי גמר'}
+  ];
+  const specials = source.specialPredictions || {};
+
+  defs.forEach(def => {
+    const stageMatches = (source.knockoutMatches || [])
+      .filter(match => normalizeKnockoutStage(match.stage) === def.stage)
+      .sort((a,b) => Number(a.startsAt || 0) - Number(b.startsAt || 0));
+    const scoringMatches = stageMatches
+      .filter(match => match.advancingTeam)
+      .sort((a,b) => Number(a.startsAt || 0) - Number(b.startsAt || 0));
+    const actualByKey = new Map();
+    scoringMatches.forEach((match, index) => {
+      actualByKey.set(`${def.prefix}${index + 1}_winner`, match);
+    });
+    const slotCount = Math.max(stageMatches.length, KNOCKOUT_STAGE_SLOTS[def.stage] || 0);
+
+    users.forEach(user => {
+      const userSpecial = plainObject(specials[user.id]);
+      for (let index = 0; index < slotCount; index++) {
+        const key = `${def.prefix}${index + 1}_winner`;
+        const answer = auditText(userSpecial[key], '');
+        const match = actualByKey.get(key) || stageMatches[index] || null;
+        const actual = auditText(match?.advancingTeam, '');
+        const points = answer && actual && sameScoreText(answer, actual) ? SCORING.knockoutStageWinner : 0;
+        rows.push(auditBaseRow(user, {
+          category: 'בונוס עולות',
+          stage: knockoutStageLabel(def.stage),
+          itemId: key,
+          item: `${def.title} ${index + 1}${match ? ` (${auditMatchTitle(match)})` : ''}`,
+          scheduledAt: auditMatchSchedule(match),
+          prediction: answer || 'לא ניחש',
+          actual,
+          result: !answer ? 'לא ניחש' : !actual ? 'ממתין לעולה' : points ? 'פגע' : 'לא פגע',
+          points,
+          savedAt: auditFormatTimestamp(userSpecial[specialPredictionTimeKey(key)]),
+          hitAt: points ? auditFormatTimestamp(auditFirstTimestamp(match?.scoredAt, match?.updatedAt)) : ''
+        }));
+      }
+    });
+  });
+}
+
+function buildPredictionAuditSource(overrides={}) {
+  const matches = overrides.matches || loadData('matches', []);
+  const knockoutMatches = overrides.knockoutMatches || loadData('knockoutMatches', []);
+  const predictions = overrides.predictions || loadData('predictions', []);
+  const knockoutPredictions = overrides.knockoutPredictions || loadData('knockoutPredictions', []);
+  const specialPredictions = overrides.specialPredictions || getSpecialPredictions();
+  const actualGroupWinners = overrides.actualGroupWinners || loadData('actualGroupWinners', {});
+  const actualTopScorer = overrides.actualTopScorer ?? loadData('actualTopScorer', '');
+  const actualChampion = overrides.actualChampion ?? loadData('actualChampion', '');
+  const dailyBonusActuals = overrides.dailyBonusActuals || loadData('dailyBonusActuals', {});
+  const groups = overrides.groups || loadData('groups', GROUPS_DEF);
+  const rawUsers = overrides.users || loadData('users', []);
+  const users = usersWithDerivedScores(rawUsers, {
+    matches,
+    knockoutMatches,
+    predictions,
+    knockoutPredictions,
+    specialPredictions,
+    actualGroupWinners,
+    actualTopScorer,
+    actualChampion,
+    dailyBonusActuals
+  });
+  return {
+    users,
+    matches,
+    knockoutMatches,
+    predictions,
+    knockoutPredictions,
+    specialPredictions,
+    actualGroupWinners,
+    actualTopScorer,
+    actualChampion,
+    dailyBonusActuals,
+    groups
+  };
+}
+
+function buildPredictionAuditReport(overrides={}) {
+  const source = buildPredictionAuditSource(overrides);
+  const rows = [];
+  appendMatchAuditRows(rows, source.users, source.matches, source.predictions, {isKnockout:false});
+  appendMatchAuditRows(rows, source.users, sortedKnockoutMatches(source.knockoutMatches), source.knockoutPredictions, {isKnockout:true});
+  appendDailyBonusAuditRows(rows, source.users, getDailyBonusQuestions(source.knockoutMatches), source.specialPredictions, source.dailyBonusActuals);
+  appendNamedSpecialAuditRows(rows, source.users, source);
+  appendKnockoutStageBonusAuditRows(rows, source.users, source);
+
+  const rowTotals = rows.reduce((map, row) => {
+    map.set(row.userId, Number(map.get(row.userId) || 0) + Number(row.points || 0));
+    return map;
+  }, new Map());
+  const scoreMap = deriveUserScoreMap(source);
+  const mismatches = source.users
+    .map(user => ({
+      user,
+      reportTotal: Number(rowTotals.get(user.id) || 0),
+      derivedTotal: Number(scoreMap.get(user.id)?.totalScore || 0)
+    }))
+    .filter(item => item.reportTotal !== item.derivedTotal);
+
+  return {
+    source,
+    rows,
+    mismatches,
+    totalPoints: rows.reduce((sum, row) => sum + Number(row.points || 0), 0),
+    generatedAt: Date.now()
+  };
+}
+
+function auditCsvEscape(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function auditRowsToCsv(rows) {
+  const header = AUDIT_REPORT_COLUMNS.map(col => auditCsvEscape(col.label)).join(',');
+  const body = rows.map(row => AUDIT_REPORT_COLUMNS.map(col => auditCsvEscape(row[col.key])).join(',')).join('\n');
+  return `\uFEFF${header}\n${body}`;
+}
+
+window.downloadAuditReportCsv = function() {
+  const report = buildPredictionAuditReport();
+  const blob = new Blob([auditRowsToCsv(report.rows)], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const stamp = new Date(report.generatedAt).toISOString().slice(0,19).replace(/[T:]/g, '-');
+  link.href = url;
+  link.download = `mundial-predictions-audit-${stamp}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+window.refreshAuditReportFromCloud = async function() {
+  const usersOk = shouldUseCloudUsers() ? await syncUsersFromCloud() : true;
+  const stateOk = shouldUseCloudState() ? await syncAppStateFromCloud() : true;
+  const panel = document.getElementById('apanel-audit-report');
+  if (panel) panel.innerHTML = renderAdminAuditReport();
+  showToast(usersOk && stateOk ? 'הדוח רוענן מהענן' : 'הדוח נבנה מהנתונים המקומיים. הסנכרון המרכזי לא זמין כרגע', usersOk && stateOk ? 2200 : 4800);
+};
+
+function renderAdminAuditReport() {
+  const report = buildPredictionAuditReport();
+  const previewRows = report.rows.slice(0, 300);
+  const validationOk = report.mismatches.length === 0;
+  const validationHtml = validationOk
+    ? '<span class="status-badge status-open">בדיקת התאמה תקינה</span>'
+    : `<span class="status-badge status-locked">${report.mismatches.length} פערים מול הניקוד המחושב</span>`;
+  const mismatchNote = validationOk ? '' : `
+    <div style="margin:12px 0;padding:10px 12px;background:#FFFBE6;border:1px solid var(--yellow);border-radius:var(--radius-sm);font-size:12px;color:var(--blue);font-weight:700">
+      נמצאו פערים בין סכום שורות הדוח לבין מנגנון הניקוד אצל:
+      ${report.mismatches.slice(0, 8).map(item => `${escapeHtml(auditUserName(item.user))} (${item.reportTotal}/${item.derivedTotal})`).join(', ')}
+      ${report.mismatches.length > 8 ? ' ועוד' : ''}
+    </div>`;
+  const rowsHtml = previewRows.map(row => `
+    <tr>
+      <td><strong>${escapeHtml(row.participant)}</strong><div style="font-size:11px;color:var(--text3)">${escapeHtml(row.teamName || '')}</div></td>
+      <td>${escapeHtml(row.category)}</td>
+      <td>${escapeHtml(row.stage)}</td>
+      <td>${escapeHtml(row.item)}</td>
+      <td>${escapeHtml(row.prediction)}</td>
+      <td>${escapeHtml(row.actual)}</td>
+      <td>${escapeHtml(row.result)}</td>
+      <td><strong>${Number(row.points || 0)}</strong></td>
+      <td>${escapeHtml(row.savedAt)}</td>
+      <td>${escapeHtml(row.hitAt)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:10px">דוח הימורים מלא</h2>
+    <p style="font-size:13px;color:var(--text2);line-height:1.45;margin-bottom:12px">
+      דוח מנהל בלבד. נבנה בזמן אמת מנתוני המשחקים, הניחושים, הבונוסים ותשובות האמת השמורות. ה-CSV כולל את כל השורות; התצוגה כאן מציגה עד 300 שורות ראשונות.
+      עמודת “נוקד / פגע” מוצגת רק כשקיים timestamp שמור לתוצאת המשחק, ניקוד הבונוס או עדכון האמת.
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <button class="btn btn-primary btn-sm" type="button" onclick="downloadAuditReportCsv()">הורד CSV מלא</button>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="refreshAuditReportFromCloud()">רענן מהענן ובנה דוח</button>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="switchAdminPanel('audit-report')">רענן תצוגה</button>
+      ${validationHtml}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+      <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text3);font-weight:700">משתתפים</div><strong style="font-size:22px;color:var(--blue)">${report.source.users.length}</strong></div>
+      <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text3);font-weight:700">שורות בדוח</div><strong style="font-size:22px;color:var(--blue)">${report.rows.length}</strong></div>
+      <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text3);font-weight:700">נקודות בדוח</div><strong style="font-size:22px;color:var(--blue)">${report.totalPoints}</strong></div>
+      <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text3);font-weight:700">נוצר</div><strong style="font-size:13px;color:var(--blue)">${auditFormatTimestamp(report.generatedAt)}</strong></div>
+    </div>
+    ${mismatchNote}
+    <div style="overflow-x:auto">
+      <table class="admin-table" style="min-width:1180px">
+        <thead>
+          <tr>
+            <th>משתתף</th><th>סוג</th><th>שלב</th><th>משחק / שאלה</th><th>הימור</th><th>אמת</th><th>סטטוס</th><th>נק'</th><th>נשמר</th><th>נוקד</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml || '<tr><td colspan="10">אין נתונים להצגה</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+// ============================================================
 // ADMIN: TOP SCORER
 // ============================================================
 function renderAdminTopScorer() {
@@ -6225,10 +6780,14 @@ window.saveKOResult = async function(id) {
   const rebuilt = rebuildKnockoutProgression(kms, {createMissing:true});
   const invalidated = new Set(rebuilt.invalidatedMatchIds);
   const koPredictions = loadData('knockoutPredictions', []).filter(pred => !invalidated.has(pred.matchId));
+  const scoring = rebuildKnockoutScoringState(rebuilt.matches, koPredictions, loadData('users', []));
   saveData('knockoutMatches',rebuilt.matches);
-  if (invalidated.size) saveData('knockoutPredictions',koPredictions);
-  const keys = invalidated.size ? ['knockoutMatches','knockoutPredictions'] : ['knockoutMatches'];
-  await showStateSaveToast(`✅ תוצאה נשמרה · ${winner} עלתה`, 'נשמר במכשיר הזה. הסנכרון המרכזי לא זמין כרגע', keys);
+  saveData('knockoutPredictions',scoring.knockoutPredictions);
+  saveData('users', scoring.users, {skipCloud:true});
+  const stateSaved = await saveAppStateToCloud(getLocalAppState(['knockoutMatches','knockoutPredictions']));
+  const usersSaved = await saveUsersToCloud(scoring.users, {replace:true});
+  const cloudOk = (stateSaved && usersSaved) || (!shouldUseCloudState() && !shouldUseCloudUsers());
+  showToast(cloudOk ? `✅ תוצאה נשמרה · ${winner} עלתה · ניקוד הנוקאאוט עודכן` : 'נשמר וחושב בדפדפן הזה. הסנכרון המרכזי לא זמין כרגע', cloudOk ? 3000 : 5200);
   switchAdminPanel('knockout');
 };
 
@@ -6269,23 +6828,6 @@ window.calcKOMatch = async function(id) {
   let preds = loadData('knockoutPredictions',[]);
   let users = loadData('users',[]);
   
-  preds.forEach(pred => {
-    if (pred.matchId !== id) return;
-    const user = users.find(u => u.id===pred.userId);
-    if (!user) return;
-    user.totalScore = Math.max(0,(user.totalScore||0)-(pred.scoreAwarded||0));
-    
-    const isExact = pred.predictedHomeScore===m.actualHomeScore && pred.predictedAwayScore===m.actualAwayScore;
-    const isOut = getOutcome(pred.predictedHomeScore,pred.predictedAwayScore)===getOutcome(m.actualHomeScore,m.actualAwayScore);
-    let s = 0;
-    if (isExact) s = SCORING.knockoutExact;
-    else if (isOut) s = SCORING.knockoutOutcome;
-    if (knockoutAdvancingBonusApplies(pred, m)) s += SCORING.knockoutAdvancing;
-    pred.scoreAwarded=s; pred.isExact=isExact; pred.isOutcomeCorrect=isOut;
-    user.totalScore=(user.totalScore||0)+s;
-    if (isExact) user.exactCount=(user.exactCount||0)+1;
-  });
-  
   const kmIdx = kms.findIndex(x=>x.id===id);
   kms[kmIdx].status='scored';
   kms[kmIdx].scoredAt=Date.now();
@@ -6293,7 +6835,9 @@ window.calcKOMatch = async function(id) {
   const rebuilt = rebuildKnockoutProgression(kms, {createMissing:true});
   const invalidated = new Set(rebuilt.invalidatedMatchIds);
   if (invalidated.size) preds = preds.filter(pred => !invalidated.has(pred.matchId));
-  users = usersWithDerivedScores(users, {knockoutMatches: rebuilt.matches, knockoutPredictions: preds});
+  const scoring = rebuildKnockoutScoringState(rebuilt.matches, preds, users);
+  preds = scoring.knockoutPredictions;
+  users = scoring.users;
   saveData('knockoutMatches',rebuilt.matches);
   saveData('knockoutPredictions',preds);
   saveData('users',users,{skipCloud:true});
